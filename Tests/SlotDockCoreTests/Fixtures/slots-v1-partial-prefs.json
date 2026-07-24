@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "slots": [
+    {
+      "id": "term",
+      "label": "Terminal",
+      "target": "/System/Applications/Utilities/Terminal.app",
+      "sortOrder": 0
+    }
+  ],
+  "preferences": {
+    "iconSize": "large",
+    "autoHide": true,
+    "autoHideDelay": 0.05,
+    "pinOpen": false,
+    "edgeHover": true
+  }
+}

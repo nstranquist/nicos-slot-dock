@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "slots": [
+    {
+      "id": "finder",
+      "label": "Finder",
+      "target": "/System/Library/CoreServices/Finder.app",
+      "sortOrder": 0
+    },
+    {
+      "id": "safari",
+      "label": "Safari",
+      "target": "/Applications/Safari.app",
+      "sortOrder": 1
+    }
+  ]
+}
