@@ -213,6 +213,12 @@ struct AppOpenAtLoginPolicyTests {
         #expect(AppOpenAtLoginPolicy.isEnabled(targetPath: "/Applications/Chrome.app", loginItemPaths: paths) == false)
     }
 
+    @Test("empty AppleScript list produces no indices")
+    func emptyAppleScriptListIsSafe() {
+        #expect(Array(AppOpenAtLoginPolicy.appleScriptItemIndices(count: 0)).isEmpty)
+        #expect(Array(AppOpenAtLoginPolicy.appleScriptItemIndices(count: 3)) == [1, 2, 3])
+    }
+
     @Test("display name strips .app")
     func displayName() {
         #expect(AppOpenAtLoginPolicy.loginItemDisplayName(path: "/Applications/Google Chrome.app") == "Google Chrome")

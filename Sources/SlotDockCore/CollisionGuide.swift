@@ -193,9 +193,9 @@ public struct CollisionGuide: Equatable, Sendable {
             detail: "Removes custom autohide-delay / time-modifier so hover behaves like stock macOS again.",
             kind: .defaultsCommand,
             payload: """
-            defaults delete com.apple.dock autohide-delay 2>/dev/null
-            defaults delete com.apple.dock autohide-time-modifier 2>/dev/null
-            killall Dock
+            /usr/bin/defaults delete com.apple.dock autohide-delay 2>/dev/null
+            /usr/bin/defaults delete com.apple.dock autohide-time-modifier 2>/dev/null
+            /usr/bin/killall Dock
             """
         ),
         CollisionAction(
@@ -229,8 +229,8 @@ public struct CollisionGuide: Equatable, Sendable {
             detail: "Shell: auto-hide without changing delay. Dock still appears on bottom hover.",
             kind: .defaultsCommand,
             payload: """
-            defaults write com.apple.dock autohide -bool true
-            killall Dock
+            /usr/bin/defaults write com.apple.dock autohide -bool true
+            /usr/bin/killall Dock
             """
         ),
         CollisionAction(
@@ -239,10 +239,10 @@ public struct CollisionGuide: Equatable, Sendable {
             detail: "Restores a always-visible system Dock via defaults + Dock restart.",
             kind: .defaultsCommand,
             payload: """
-            defaults write com.apple.dock autohide -bool false
-            defaults delete com.apple.dock autohide-delay 2>/dev/null
-            defaults delete com.apple.dock autohide-time-modifier 2>/dev/null
-            killall Dock
+            /usr/bin/defaults write com.apple.dock autohide -bool false
+            /usr/bin/defaults delete com.apple.dock autohide-delay 2>/dev/null
+            /usr/bin/defaults delete com.apple.dock autohide-time-modifier 2>/dev/null
+            /usr/bin/killall Dock
             """
         ),
         CollisionAction(
@@ -257,11 +257,12 @@ public struct CollisionGuide: Equatable, Sendable {
 
     /// Shell to enable auto-hide + set hover delay (seconds before Dock peeks).
     public static func scriptRaiseDelay(seconds: Double) -> String {
-        """
-        defaults write com.apple.dock autohide -bool true
-        defaults write com.apple.dock autohide-delay -float \(seconds)
-        defaults write com.apple.dock autohide-time-modifier -float 0.4
-        killall Dock
+        let safeSeconds = seconds.isFinite ? min(10_000, max(0, seconds)) : 5
+        return """
+        /usr/bin/defaults write com.apple.dock autohide -bool true
+        /usr/bin/defaults write com.apple.dock autohide-delay -float \(safeSeconds)
+        /usr/bin/defaults write com.apple.dock autohide-time-modifier -float 0.4
+        /usr/bin/killall Dock
         """
     }
 

@@ -2,7 +2,10 @@ import Foundation
 
 /// One item from the user's system macOS Dock (`com.apple.dock` persistent-apps).
 public struct SystemDockEntry: Equatable, Sendable, Identifiable {
-    public var id: String { bundleIdentifier ?? path }
+    public var id: String {
+        let identity = bundleIdentifier.map { "bundle:\($0)" } ?? "path:\(normalizedPath)"
+        return guid.map { "dock:\($0):\(identity)" } ?? "dock:\(identity):\(normalizedPath)"
+    }
     public var label: String
     public var path: String
     public var bundleIdentifier: String?
@@ -34,6 +37,19 @@ public struct SystemDockEntry: Equatable, Sendable, Identifiable {
             s.removeLast()
         }
         return s
+    }
+
+    /// Canonical path used only for identity/deduplication. Display and launch
+    /// paths remain standardized-but-not-resolved so macOS firmlink mappings
+    /// and explicit user spellings do not leak into Slot data.
+    public static func canonicalIdentityPath(_ raw: String) -> String {
+        let normalized = normalizePath(raw)
+        guard normalized.hasPrefix("/") else { return normalized }
+        let standardized = URL(fileURLWithPath: normalized).standardizedFileURL
+        let resolved = FileManager.default.fileExists(atPath: standardized.path)
+            ? standardized.resolvingSymlinksInPath()
+            : standardized
+        return resolved.path
     }
 }
 
@@ -83,7 +99,9 @@ public enum SystemDockReader {
         return parsePersistentApps(from: data)
     }
 
-    /// Parse Dock plist bytes into ordered app entries (file-tiles only).
+    /// Parse Dock plist bytes into ordered application entries. Finder folders,
+    /// URLs, documents, and unresolved aliases are intentionally not launch
+    /// targets for the app strip and are skipped.
     public static func parsePersistentApps(from data: Data) -> [SystemDockEntry] {
         let object: Any
         do {
@@ -99,8 +117,9 @@ public enum SystemDockReader {
 
         for app in apps {
             let tileType = app["tile-type"] as? String ?? "file-tile"
-            // Skip spacers / other non-app tiles.
-            if tileType == "spacer-tile" || tileType == "small-spacer-tile" { continue }
+            // Slot Dock models application tiles only. Keep folders/URLs out of
+            // the app strip until they have an explicit launch policy.
+            guard tileType == "file-tile" else { continue }
 
             guard let tile = app["tile-data"] as? [String: Any] else { continue }
             let guid = app["GUID"] as? Int
@@ -111,8 +130,25 @@ public enum SystemDockReader {
             {
                 path = SystemDockEntry.normalizePath(urlString)
             }
+            if path.isEmpty,
+               let fileData = tile["file-data"] as? [String: Any],
+               let aliasData = fileData["_CFURLAliasData"] as? Data,
+               let aliasPath = resolveAliasPath(aliasData)
+            {
+                path = aliasPath
+            }
+            if path.isEmpty,
+               let fileData = tile["file-data"] as? [String: Any],
+               let bookmarkData = fileData["_CFURLBookmarkData"] as? Data,
+               let bookmarkPath = resolveBookmarkPath(bookmarkData)
+            {
+                path = bookmarkPath
+            }
             // bookmarked apps without resolved URL — skip if no path
             guard !path.isEmpty else { continue }
+            // `persistent-apps` can contain generic file tiles despite its key
+            // name. Do not silently present a document/folder as an app slot.
+            guard path.lowercased().hasSuffix(".app") else { continue }
 
             let label: String = {
                 if let fileLabel = tile["file-label"] as? String, !fileLabel.isEmpty {
@@ -134,9 +170,39 @@ public enum SystemDockReader {
         return result
     }
 
+    private static func resolveAliasPath(_ aliasData: Data) -> String? {
+        let aliasURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("slot-dock-alias-\(UUID().uuidString)", isDirectory: false)
+        do {
+            try aliasData.write(to: aliasURL, options: .atomic)
+            defer {
+                _ = try? FileManager.default.removeItem(at: aliasURL)
+            }
+            guard let url = try? URL(
+                resolvingAliasFileAt: aliasURL,
+                options: [.withoutMounting, .withoutUI]
+            ) else { return nil }
+            return SystemDockEntry.normalizePath(url.path)
+        } catch {
+            return nil
+        }
+    }
+
+    private static func resolveBookmarkPath(_ bookmarkData: Data) -> String? {
+        var isStale = false
+        guard let url = try? URL(
+            resolvingBookmarkData: bookmarkData,
+            options: [.withoutMounting, .withoutUI],
+            relativeTo: nil,
+            bookmarkDataIsStale: &isStale
+        ) else { return nil }
+        return SystemDockEntry.normalizePath(url.path)
+    }
+
     /// Convert a system Dock entry into a Slot (stable id from path/bundle).
     public static func slot(from entry: SystemDockEntry) -> Slot {
-        let id = "sysdock:" + (entry.bundleIdentifier ?? entry.normalizedPath)
+        let identity = entry.bundleIdentifier.map { "\($0):\(entry.normalizedPath)" } ?? entry.normalizedPath
+        let id = "sysdock:" + identity
         return Slot(
             id: id,
             label: entry.label,
@@ -232,17 +298,8 @@ public enum SlotComposer {
         var stripPaths = Set(items.map { SystemDockEntry.normalizePath($0.slot.target).lowercased() }.filter { !$0.isEmpty })
         var stripBundles = Set<String>()
         for item in items {
-            if item.slot.id.hasPrefix("sysdock:") {
-                let rest = String(item.slot.id.dropFirst("sysdock:".count))
-                if rest.contains("."), !rest.hasPrefix("/") {
-                    stripBundles.insert(rest.lowercased())
-                }
-            }
-            if item.slot.id.hasPrefix("running:") {
-                let rest = String(item.slot.id.dropFirst("running:".count))
-                if rest.contains("."), !rest.hasPrefix("/") {
-                    stripBundles.insert(rest.lowercased())
-                }
+            if let bundle = AppIdentity.from(slot: item.slot).bundleIdentifier {
+                stripBundles.insert(bundle.lowercased())
             }
         }
 

@@ -1,7 +1,8 @@
 import Foundation
 
 /// Remappable keyboard shortcut stored with dock preferences.
-/// `keyEquivalent` matches AppKit (`NSMenuItem.keyEquivalent`): lowercase letter/digit/punct.
+/// `keyEquivalent` is a lowercase character or a canonical special token such
+/// as `<f1>`, `<up>`, `<return>`, or `<escape>`.
 public struct KeyBinding: Codable, Equatable, Sendable {
     /// Empty string = unbound.
     public var keyEquivalent: String
@@ -40,15 +41,45 @@ public struct KeyBinding: Codable, Equatable, Sendable {
         if option { parts += "⌥" }
         if shift { parts += "⇧" }
         if command { parts += "⌘" }
-        parts += keyEquivalent.uppercased()
+        parts += Self.displayKey(keyEquivalent)
         return parts
     }
 
     public static func normalizeKey(_ raw: String) -> String {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lowered = trimmed.lowercased()
+        if specialKeys.contains(lowered) {
+            return lowered
+        }
         guard let first = trimmed.first else { return "" }
         // Single character only; lowercase for AppKit menu equivalents.
         return String(first).lowercased()
+    }
+
+    private static let specialKeys: Set<String> = [
+        "<f1>", "<f2>", "<f3>", "<f4>", "<f5>", "<f6>",
+        "<f7>", "<f8>", "<f9>", "<f10>", "<f11>", "<f12>",
+        "<up>", "<down>", "<left>", "<right>",
+        "<home>", "<end>", "<pageup>", "<pagedown>",
+        "<return>", "<tab>", "<space>", "<delete>", "<forwarddelete>", "<escape>",
+    ]
+
+    public static func displayKey(_ key: String) -> String {
+        switch key.lowercased() {
+        case "<up>": return "↑"
+        case "<down>": return "↓"
+        case "<left>": return "←"
+        case "<right>": return "→"
+        case "<return>": return "↩"
+        case "<tab>": return "⇥"
+        case "<space>": return "Space"
+        case "<delete>": return "⌫"
+        case "<forwarddelete>": return "⌦"
+        case "<escape>": return "Esc"
+        case "<pageup>": return "Page Up"
+        case "<pagedown>": return "Page Down"
+        default: return key.uppercased()
+        }
     }
 
     /// Build from an `NSEvent`-like character + modifier flags (bit layout free of AppKit).
@@ -98,6 +129,12 @@ public struct DockHotkeys: Codable, Equatable, Sendable {
     }
 
     public static let `default` = DockHotkeys()
+
+    /// Whether at least one shortcut remains available as a recovery path when
+    /// the strip is auto-hidden and edge/status affordances are disabled.
+    public var hasEnabledBinding: Bool {
+        [toggleDock, openSettings, pinOpen, quit, launchSlotDigits].contains(where: \.isBound)
+    }
 
     /// Sensible “classic” set (matches earlier hardcoded menu keys) — still opt-in via enabled flags.
     public static let classicEnabled = DockHotkeys(

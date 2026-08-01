@@ -24,12 +24,18 @@ public enum DropPathResolver {
 
         if let url = URL(string: trimmed), let scheme = url.scheme?.lowercased() {
             if scheme == "http" || scheme == "https" {
-                let host = url.host ?? "Link"
+                guard let host = url.host, !host.isEmpty else {
+                    return .reject("URL needs a host")
+                }
                 return .accept(Candidate(label: host, target: trimmed))
             }
             if scheme == "file" {
                 return resolveFilePath(url.path)
             }
+            return .accept(Candidate(
+                label: url.host?.isEmpty == false ? (url.host ?? scheme) : scheme,
+                target: url.absoluteString
+            ))
         }
 
         // Bare path (possibly with file:// already expanded by pasteboard)
@@ -38,10 +44,6 @@ public enum DropPathResolver {
             return resolveFilePath(expanded)
         }
 
-        // Last resort: treat as URL string if it looks like one
-        if trimmed.contains("://") {
-            return .accept(Candidate(label: "Link", target: trimmed))
-        }
         return .reject("Unsupported drop (need app, file, or URL)")
     }
 
@@ -65,7 +67,42 @@ public enum DropPathResolver {
         let exists = FileManager.default.fileExists(atPath: normalized, isDirectory: &isDir)
         let name = (normalized as NSString).lastPathComponent
 
-        if normalized.hasSuffix(".app") || (exists && isDir.boolValue && name.hasSuffix(".app")) {
+        // Finder can drop an Internet Shortcut file instead of its resolved URL.
+        // Decode it explicitly so malformed/non-UTF-8 input is visible rather
+        // than being accepted as an opaque file or silently discarded.
+        if name.lowercased().hasSuffix(".url"), exists, !isDir.boolValue {
+            guard let data = try? Data(contentsOf: URL(fileURLWithPath: normalized)),
+                  let contents = String(data: data, encoding: .utf8)
+            else {
+                return .reject("Internet Shortcut is not valid UTF-8: \(name)")
+            }
+            let target = contents
+                .split(whereSeparator: \.isNewline)
+                .compactMap { line -> String? in
+                    let parts = line.split(separator: "=", maxSplits: 1).map(String.init)
+                    guard parts.count == 2, parts[0].trimmingCharacters(in: .whitespaces).lowercased() == "url" else {
+                        return nil
+                    }
+                    return parts[1].trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+                .first
+            guard let target,
+                  let url = URL(string: target),
+                  let scheme = url.scheme?.lowercased(),
+                  !scheme.isEmpty,
+                  (scheme == "http" || scheme == "https" ? url.host?.isEmpty == false : true)
+            else {
+                return .reject("Internet Shortcut has no valid URL: \(name)")
+            }
+            let label = (name as NSString).deletingPathExtension
+            return .accept(Candidate(label: label.isEmpty ? name : label, target: url.absoluteString))
+        }
+
+        let isApp = name.lowercased().hasSuffix(".app")
+        if isApp && exists && !isDir.boolValue {
+            return .reject("Application bundle is not a directory: \(name)")
+        }
+        if isApp {
             let label = (name as NSString).deletingPathExtension
             return .accept(Candidate(label: label.isEmpty ? name : label, target: normalized))
         }
@@ -79,7 +116,7 @@ public enum DropPathResolver {
         }
 
         // Allow non-existent paths that look intentional (user may fix later)
-        if name.hasSuffix(".app") {
+        if name.lowercased().hasSuffix(".app") {
             let label = (name as NSString).deletingPathExtension
             return .accept(Candidate(label: label, target: normalized))
         }

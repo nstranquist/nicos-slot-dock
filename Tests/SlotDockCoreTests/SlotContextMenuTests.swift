@@ -143,6 +143,7 @@ struct SlotContextMenuTests {
     @Test("canOpenNewInstance only for .app applications")
     func newInstanceGate() {
         #expect(SlotContextMenuBuilder.canOpenNewInstance(kind: .application, path: "/Apps/X.app") == true)
+        #expect(SlotContextMenuBuilder.canOpenNewInstance(kind: .application, path: "/Apps/X.APP") == true)
         #expect(SlotContextMenuBuilder.canOpenNewInstance(kind: .file, path: "/tmp/a.pdf") == false)
         #expect(SlotContextMenuBuilder.canOpenNewInstance(kind: .url, path: "https://x") == false)
     }

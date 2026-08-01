@@ -38,10 +38,7 @@ final class HotkeyManager {
 
     func invalidate() {
         unregisterAll()
-        if let handlerRef {
-            RemoveEventHandler(handlerRef)
-            self.handlerRef = nil
-        }
+        removeHandler()
         handlers.removeAll()
         lastReport = HotkeyRegistrationReport()
         onReportChange?(lastReport)
@@ -52,29 +49,36 @@ final class HotkeyManager {
         self.handlers = Dictionary(uniqueKeysWithValues: handlers.map { ($0.key.rawValue, $0.value) })
         var report = HotkeyRegistrationReport(globalEnabled: hotkeys.globalEnabled)
 
-        let handlerOK = ensureHandlerInstalled()
-        if !handlerOK {
-            report.handlerInstallFailed = true
-            report.handlerStatusCode = lastHandlerStatus
-        }
-
         guard hotkeys.globalEnabled else {
+            // Do not install a Carbon handler for an explicitly disabled feature.
+            removeHandler()
             SlotDockTelemetry.hotkey.info("global hotkeys disabled")
             lastReport = report
             onReportChange?(report)
             return
         }
 
-        register(hotkeys.toggleDock, id: Action.toggleDock.rawValue, report: &report)
-        register(hotkeys.openSettings, id: Action.openSettings.rawValue, report: &report)
-        register(hotkeys.pinOpen, id: Action.pinOpen.rawValue, report: &report)
-        register(hotkeys.quit, id: Action.quit.rawValue, report: &report)
+        let handlerOK = ensureHandlerInstalled()
+        if !handlerOK {
+            report.handlerInstallFailed = true
+            report.handlerStatusCode = lastHandlerStatus
+            lastReport = report
+            onReportChange?(report)
+            return
+        }
+
+        var claimed = Set<String>()
+
+        register(hotkeys.toggleDock, id: Action.toggleDock.rawValue, report: &report, claimed: &claimed)
+        register(hotkeys.openSettings, id: Action.openSettings.rawValue, report: &report, claimed: &claimed)
+        register(hotkeys.pinOpen, id: Action.pinOpen.rawValue, report: &report, claimed: &claimed)
+        register(hotkeys.quit, id: Action.quit.rawValue, report: &report, claimed: &claimed)
 
         if hotkeys.launchSlotDigits.isBound {
             for digit in 1...9 {
                 var binding = hotkeys.launchSlotDigits
                 binding.keyEquivalent = "\(digit)"
-                register(binding, id: Action.slot1.rawValue + UInt32(digit - 1), report: &report)
+                register(binding, id: Action.slot1.rawValue + UInt32(digit - 1), report: &report, claimed: &claimed)
             }
         }
         report.registeredCount = hotKeyRefs.count
@@ -84,7 +88,7 @@ final class HotkeyManager {
             "global hotkeys applied refs=\(self.hotKeyRefs.count, privacy: .public) failures=\(report.failures.count, privacy: .public) digits=\(hotkeys.launchSlotDigits.isBound, privacy: .public)"
         )
         if report.hasProblems {
-            SlotDockTelemetry.hotkey.warning("hotkey problems: \(report.userSummary, privacy: .public)")
+            SlotDockTelemetry.hotkey.warning("hotkey problems: \(report.userSummary, privacy: .private)")
         }
     }
 
@@ -97,7 +101,7 @@ final class HotkeyManager {
         if binding.shift { mask.insert(.shift) }
         if binding.control { mask.insert(.control) }
         if mask.isEmpty { mask = .command }
-        return (binding.keyEquivalent, mask)
+        return (appKitKeyEquivalent(for: binding.keyEquivalent), mask)
     }
 
     // MARK: - Carbon
@@ -114,7 +118,7 @@ final class HotkeyManager {
                 guard let userData else { return OSStatus(eventNotHandledErr) }
                 let manager = Unmanaged<HotkeyManager>.fromOpaque(userData).takeUnretainedValue()
                 var hotKeyID = EventHotKeyID()
-                GetEventParameter(
+                let parameterStatus = GetEventParameter(
                     event,
                     EventParamName(kEventParamDirectObject),
                     EventParamType(typeEventHotKeyID),
@@ -123,6 +127,7 @@ final class HotkeyManager {
                     nil,
                     &hotKeyID
                 )
+                guard parameterStatus == noErr else { return OSStatus(eventNotHandledErr) }
                 Task { @MainActor in
                     SlotDockTelemetry.hotkey.info("hotkey fire id=\(hotKeyID.id, privacy: .public)")
                     manager.handlers[hotKeyID.id]?()
@@ -143,15 +148,42 @@ final class HotkeyManager {
         return true
     }
 
-    private func register(_ binding: KeyBinding, id: UInt32, report: inout HotkeyRegistrationReport) {
-        guard binding.isBound,
-              let keyCode = Self.carbonKeyCode(for: binding.keyEquivalent) else { return }
+    private func register(
+        _ binding: KeyBinding,
+        id: UInt32,
+        report: inout HotkeyRegistrationReport,
+        claimed: inout Set<String>
+    ) {
+        guard binding.isBound else { return }
+        guard let keyCode = Self.carbonKeyCode(for: binding.keyEquivalent) else {
+            report.failures.append(
+                HotkeyRegistrationFailure(
+                    actionID: id,
+                    actionLabel: HotkeyRegistrationReport.label(forActionID: id),
+                    statusCode: -10001,
+                    message: HotkeyRegistrationReport.explainStatus(-10001)
+                )
+            )
+            return
+        }
+        let modifiers = Self.carbonModifiers(for: binding)
+        let claim = "\(keyCode):\(modifiers)"
+        guard claimed.insert(claim).inserted else {
+            report.failures.append(
+                HotkeyRegistrationFailure(
+                    actionID: id,
+                    actionLabel: HotkeyRegistrationReport.label(forActionID: id),
+                    statusCode: -10002,
+                    message: HotkeyRegistrationReport.explainStatus(-10002)
+                )
+            )
+            return
+        }
         var hotKeyRef: EventHotKeyRef?
         let hotKeyID = EventHotKeyID(signature: OSType(0x534C444B), id: id) // 'SLDK'
-        let mods = Self.carbonModifiers(for: binding)
         let status = RegisterEventHotKey(
             keyCode,
-            mods,
+            modifiers,
             hotKeyID,
             GetApplicationEventTarget(),
             0,
@@ -185,6 +217,13 @@ final class HotkeyManager {
         hotKeyRefs.removeAll()
     }
 
+    private func removeHandler() {
+        if let handlerRef {
+            RemoveEventHandler(handlerRef)
+            self.handlerRef = nil
+        }
+    }
+
     private static func carbonModifiers(for binding: KeyBinding) -> UInt32 {
         var mods: UInt32 = 0
         if binding.command { mods |= UInt32(cmdKey) }
@@ -196,6 +235,35 @@ final class HotkeyManager {
     }
 
     static func carbonKeyCode(for key: String) -> UInt32? {
+        switch key.lowercased() {
+        case "<f1>": return UInt32(kVK_F1)
+        case "<f2>": return UInt32(kVK_F2)
+        case "<f3>": return UInt32(kVK_F3)
+        case "<f4>": return UInt32(kVK_F4)
+        case "<f5>": return UInt32(kVK_F5)
+        case "<f6>": return UInt32(kVK_F6)
+        case "<f7>": return UInt32(kVK_F7)
+        case "<f8>": return UInt32(kVK_F8)
+        case "<f9>": return UInt32(kVK_F9)
+        case "<f10>": return UInt32(kVK_F10)
+        case "<f11>": return UInt32(kVK_F11)
+        case "<f12>": return UInt32(kVK_F12)
+        case "<up>": return UInt32(kVK_UpArrow)
+        case "<down>": return UInt32(kVK_DownArrow)
+        case "<left>": return UInt32(kVK_LeftArrow)
+        case "<right>": return UInt32(kVK_RightArrow)
+        case "<home>": return UInt32(kVK_Home)
+        case "<end>": return UInt32(kVK_End)
+        case "<pageup>": return UInt32(kVK_PageUp)
+        case "<pagedown>": return UInt32(kVK_PageDown)
+        case "<return>": return UInt32(kVK_Return)
+        case "<tab>": return UInt32(kVK_Tab)
+        case "<space>": return UInt32(kVK_Space)
+        case "<delete>": return UInt32(kVK_Delete)
+        case "<forwarddelete>": return UInt32(kVK_ForwardDelete)
+        case "<escape>": return UInt32(kVK_Escape)
+        default: break
+        }
         guard let ch = key.lowercased().first else { return nil }
         switch ch {
         case "a": return UInt32(kVK_ANSI_A)
@@ -247,5 +315,40 @@ final class HotkeyManager {
         case " ": return UInt32(kVK_Space)
         default: return nil
         }
+    }
+
+    private static func appKitKeyEquivalent(for key: String) -> String {
+        let scalar: UInt32?
+        switch key.lowercased() {
+        case "<up>": scalar = 0xF700
+        case "<down>": scalar = 0xF701
+        case "<left>": scalar = 0xF702
+        case "<right>": scalar = 0xF703
+        case "<f1>": scalar = 0xF704
+        case "<f2>": scalar = 0xF705
+        case "<f3>": scalar = 0xF706
+        case "<f4>": scalar = 0xF707
+        case "<f5>": scalar = 0xF708
+        case "<f6>": scalar = 0xF709
+        case "<f7>": scalar = 0xF70A
+        case "<f8>": scalar = 0xF70B
+        case "<f9>": scalar = 0xF70C
+        case "<f10>": scalar = 0xF70D
+        case "<f11>": scalar = 0xF70E
+        case "<f12>": scalar = 0xF70F
+        case "<home>": scalar = 0xF729
+        case "<end>": scalar = 0xF72B
+        case "<pageup>": scalar = 0xF72C
+        case "<pagedown>": scalar = 0xF72D
+        case "<delete>": scalar = 0xF728
+        case "<forwarddelete>": scalar = 0xF728
+        case "<return>": scalar = 0x000D
+        case "<tab>": scalar = 0x0009
+        case "<space>": scalar = 0x0020
+        case "<escape>": scalar = 0x001B
+        default: scalar = nil
+        }
+        guard let scalar, let value = UnicodeScalar(scalar) else { return key }
+        return String(value)
     }
 }

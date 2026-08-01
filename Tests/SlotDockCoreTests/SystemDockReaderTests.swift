@@ -4,6 +4,19 @@ import Testing
 
 @Suite("SystemDockReader + SlotComposer")
 struct SystemDockReaderTests {
+    @Test("normalization resolves existing symlinks")
+    func resolvesSymlinkIdentity() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("slot-dock-symlink-\(UUID().uuidString)")
+        let target = root.appendingPathComponent("target")
+        let link = root.appendingPathComponent("link")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data("target".utf8).write(to: target)
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+        #expect(SystemDockEntry.canonicalIdentityPath(link.path) == target.path)
+    }
+
     /// Minimal XML plist fixture matching Dock persistent-apps shape.
     private func fixturePlistData() throws -> Data {
         let xml = """
@@ -91,6 +104,46 @@ struct SystemDockReaderTests {
             SystemDockEntry.normalizePath("/Applications/Foo.app/")
                 == "/Applications/Foo.app"
         )
+    }
+
+    @Test("skips folders and generic file tiles")
+    func skipsNonApplicationTiles() throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+          <key>persistent-apps</key>
+          <array>
+            <dict>
+              <key>tile-type</key><string>file-tile</string>
+              <key>tile-data</key><dict>
+                <key>file-label</key><string>Document</string>
+                <key>file-data</key><dict>
+                  <key>_CFURLString</key><string>file:///Users/me/readme.pdf</string>
+                </dict>
+              </dict>
+            </dict>
+            <dict>
+              <key>tile-type</key><string>directory-tile</string>
+              <key>tile-data</key><dict/>
+            </dict>
+          </array>
+        </dict>
+        </plist>
+        """
+        // A Dock plist can contain file and folder tiles under adjacent keys;
+        // Slot Dock must not present those as launchable application slots.
+        let entries = SystemDockReader.parsePersistentApps(from: Data(xml.utf8))
+        #expect(entries.isEmpty)
+    }
+
+    @Test("system Dock identities include path and do not collide on bundle id")
+    func systemIdentityIncludesPath() {
+        let a = SystemDockEntry(label: "A", path: "/Applications/A.app", bundleIdentifier: "com.example.same", guid: 1)
+        let b = SystemDockEntry(label: "B", path: "/Volumes/Other/A.app", bundleIdentifier: "com.example.same", guid: 2)
+        #expect(a.id != b.id)
+        #expect(SystemDockReader.slot(from: a).id != SystemDockReader.slot(from: b).id)
     }
 
     @Test("compose off shows only custom")

@@ -143,6 +143,7 @@ struct DockView: View {
         }
         .buttonStyle(.plain)
         .help(help)
+        .accessibilityLabel(help)
         .opacity(max(0.55, contentOpacity))
     }
 
@@ -171,10 +172,11 @@ struct DockView: View {
 
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
         var claimed = false
+        let dockStore = store
         for provider in providers {
             if provider.hasItemConformingToTypeIdentifier("public.file-url") {
                 claimed = true
-                provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, _ in
+                provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, error in
                     let raw: String? = {
                         if let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) {
                             return url.path
@@ -183,31 +185,49 @@ struct DockView: View {
                         if let str = item as? String { return str }
                         return nil
                     }()
-                    guard let raw else { return }
-                    DispatchQueue.main.async {
-                        _ = store.addSlotFromDrop(raw)
+                    let errorMessage = error?.localizedDescription
+                    Task { @MainActor [dockStore] in
+                        guard let raw else {
+                            dockStore.lastLaunchError = errorMessage ?? "Could not read the dropped item."
+                            return
+                        }
+                        if case .reject(let reason) = dockStore.addSlotFromDrop(raw) {
+                            dockStore.lastLaunchError = reason
+                        }
                     }
                 }
             } else if provider.hasItemConformingToTypeIdentifier("public.url") {
                 claimed = true
-                provider.loadItem(forTypeIdentifier: "public.url", options: nil) { item, _ in
+                provider.loadItem(forTypeIdentifier: "public.url", options: nil) { item, error in
                     let raw: String? = {
                         if let url = item as? URL { return url.absoluteString }
                         if let data = item as? Data, let s = String(data: data, encoding: .utf8) { return s }
                         if let s = item as? String { return s }
                         return nil
                     }()
-                    guard let raw else { return }
-                    DispatchQueue.main.async {
-                        _ = store.addSlotFromDrop(raw)
+                    let errorMessage = error?.localizedDescription
+                    Task { @MainActor [dockStore] in
+                        guard let raw else {
+                            dockStore.lastLaunchError = errorMessage ?? "Could not read the dropped item."
+                            return
+                        }
+                        if case .reject(let reason) = dockStore.addSlotFromDrop(raw) {
+                            dockStore.lastLaunchError = reason
+                        }
                     }
                 }
             } else if provider.canLoadObject(ofClass: String.self) {
                 claimed = true
-                _ = provider.loadObject(ofClass: String.self) { str, _ in
-                    guard let str else { return }
-                    DispatchQueue.main.async {
-                        _ = store.addSlotFromDrop(str)
+                _ = provider.loadObject(ofClass: String.self) { str, error in
+                    let errorMessage = error?.localizedDescription
+                    Task { @MainActor [dockStore] in
+                        guard let str else {
+                            dockStore.lastLaunchError = errorMessage ?? "Could not read the dropped item."
+                            return
+                        }
+                        if case .reject(let reason) = dockStore.addSlotFromDrop(str) {
+                            dockStore.lastLaunchError = reason
+                        }
                     }
                 }
             }
@@ -299,6 +319,7 @@ struct ControlsMenuButton: View {
                 .foregroundStyle(.primary.opacity(0.78))
                 .frame(width: 28, height: 28)
                 .contentShape(Rectangle())
+                .accessibilityLabel("Options and controls")
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)

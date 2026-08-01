@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import SlotDockCore
 import SwiftUI
 
@@ -25,14 +26,34 @@ enum SlotDockMain {
 
 /// AppKit adapter over `SingleInstancePolicy` (bundle-id peers + distributed focus).
 enum SingleInstanceGate {
+    /// A kernel-held advisory lock closes the check-then-launch race that a
+    /// bundle-id process scan cannot prevent. The descriptor stays open for
+    /// the process lifetime; the kernel releases it on crash/termination.
+    nonisolated(unsafe) private static var lockFD: Int32 = -1
+    private enum LockAttempt { case acquired, busy, unavailable }
+
     static func claimOrHandoff() -> Bool {
+        switch acquireLock() {
+        case .acquired:
+            return true
+        case .unavailable:
+            fputs("slot-dock: could not claim the single-instance lock; refusing a second UI\n", stderr)
+            return false
+        case .busy:
+            break
+        }
+
         let bundleID = Bundle.main.bundleIdentifier ?? SlotDockProcessIdentity.bundleIdentifier
         let selfPID = ProcessInfo.processInfo.processIdentifier
         let peers = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
             .map { (pid: $0.processIdentifier, isFinished: $0.isTerminated) }
         switch SingleInstancePolicy.decide(selfPID: selfPID, peers: peers) {
         case .claim:
-            return true
+            // The kernel lock is authoritative. A busy lock with no discoverable
+            // peer can be a launch race, a stale process scan, or an older build;
+            // claiming here would recreate the duplicate-UI bug we are guarding.
+            fputs("slot-dock: instance lock is busy but no peer was discoverable; refusing a second UI\n", stderr)
+            return false
         case .handoff(let existingPID):
             SlotDockTelemetry.appLifecycle.info(
                 "Second instance → handoff to pid=\(existingPID, privacy: .public)"
@@ -50,17 +71,61 @@ enum SingleInstanceGate {
             return false
         }
     }
+
+    private static func acquireLock() -> LockAttempt {
+        if lockFD >= 0 { return .acquired }
+        let url = SlotStore.defaultConfigURL()
+            .deletingLastPathComponent()
+            .appendingPathComponent("instance.lock", isDirectory: false)
+        do {
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700]
+            )
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o700],
+                ofItemAtPath: url.deletingLastPathComponent().path
+            )
+        } catch {
+            return .unavailable
+        }
+        let fd = open(url.path, O_RDWR | O_CREAT, mode_t(0o600))
+        guard fd >= 0 else { return .unavailable }
+        // `open` does not tighten permissions on an existing file.
+        _ = try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+        guard flock(fd, LOCK_EX | LOCK_NB) == 0 else {
+            let busy = errno == EWOULDBLOCK || errno == EAGAIN
+            close(fd)
+            return busy ? .busy : .unavailable
+        }
+        lockFD = fd
+        return .acquired
+    }
 }
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
-    private var store: SlotDockStore!
-    private var dockController: DockWindowController!
+    private lazy var store: SlotDockStore = {
+        SlotDockStore(configURL: Self.configURLFromEnvironment())
+    }()
+    private lazy var dockController: DockWindowController = {
+        DockWindowController(store: store)
+    }()
     private var statusItem: NSStatusItem?
     private let hotkeys = HotkeyManager()
     private var observers: [NSObjectProtocol] = []
     private var dockWatcher: DockPlistWatcher?
     private var focusObserver: NSObjectProtocol?
+
+    private static func configURLFromEnvironment() -> URL {
+        if let override = ProcessInfo.processInfo.environment["SLOT_DOCK_CONFIG"],
+           !override.isEmpty
+        {
+            return URL(fileURLWithPath: override)
+        }
+        return SlotStore.defaultConfigURL()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if ProcessInfo.processInfo.environment["SLOT_DOCK_REGULAR"] == "1" {
@@ -69,22 +134,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             NSApp.setActivationPolicy(.accessory)
         }
 
-        let configURL: URL
-        if let override = ProcessInfo.processInfo.environment["SLOT_DOCK_CONFIG"],
-           !override.isEmpty
-        {
-            configURL = URL(fileURLWithPath: override)
-        } else {
-            configURL = SlotStore.defaultConfigURL()
-        }
-
-        store = SlotDockStore(configURL: configURL)
         store.syncLaunchAtLoginFromPreferences()
-        dockController = DockWindowController(store: store)
         dockController.show()
-        DispatchQueue.main.async { [weak self] in
-            self?.dockController.show()
-        }
 
         installFocusHandoffListener()
         syncStatusItem()
@@ -140,24 +191,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if SlotDockHeadless.isSelfTest {
             SlotDockHeadless.runSelfTestAndExit(store: store, dockController: dockController)
         } else if !SlotDockHeadless.isHeadless {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-                guard let self else { return }
-                self.store.beginReveal()
-                self.dockController.syncRevealAnimated(duration: 0.45)
-                self.dockController.syncSafeArea()
-                // One-shot compatibility prompt (not every launch if dismissed).
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            // Start collapsed so launch never produces an unsolicited reveal /
+            // hide animation. A deliberately persistent configuration still
+            // honors its intent and opens immediately.
+            if store.preferences.pinOpen || !store.preferences.autoHide {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
                     guard let self else { return }
-                    CollisionGuidePrompt.presentIfNeeded(store: self.store)
+                    self.store.beginReveal()
+                    self.dockController.syncRevealAnimated(duration: 0.25)
+                    self.dockController.syncSafeArea()
                 }
-                if !self.store.preferences.pinOpen, self.store.preferences.autoHide {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
-                        guard let self, !self.store.settingsOpen, !self.store.preferences.pinOpen else { return }
-                        self.store.beginHide()
-                        self.dockController.syncRevealAnimated(duration: 0.4)
-                        self.dockController.syncSafeArea()
-                    }
-                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+                guard let self else { return }
+                // One-shot compatibility prompt (not every launch if dismissed).
+                CollisionGuidePrompt.presentIfNeeded(store: self.store)
             }
         }
 
@@ -165,7 +213,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             "Launched custom=\(self.store.slots.count, privacy: .public) system=\(self.store.systemDockEntries.count, privacy: .public) display=\(self.store.displayItems.count, privacy: .public) mode=\(self.store.preferences.systemDockIntegration.rawValue, privacy: .public) transientRunning=\(self.store.preferences.showTransientRunningApps, privacy: .public) tooltips=\(self.store.preferences.showIconTooltips, privacy: .public)"
         )
         fputs(
-            "slot-dock: launched custom=\(store.slots.count) system=\(store.systemDockEntries.count) display=\(store.displayItems.count) mode=\(store.preferences.systemDockIntegration.rawValue) config=\(configURL.path)\n",
+            "slot-dock: launched custom=\(store.slots.count) system=\(store.systemDockEntries.count) display=\(store.displayItems.count) mode=\(store.preferences.systemDockIntegration.rawValue)\n",
             stderr
         )
     }
@@ -179,8 +227,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func installDockWatcher() {
-        let store = self.store!
-        let dockController = self.dockController!
         let watcher = DockPlistWatcher { [weak store, weak dockController] in
             Task { @MainActor in
                 SlotDockTelemetry.systemDock.debug("Dock plist changed — refresh")
@@ -193,10 +239,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        // Restore any windows we padded before exit.
-        dockController?.safeArea.restoreAllTracked()
+        dockController.invalidate()
         dockWatcher?.stop()
-        dockController?.runningApps.invalidate()
         hotkeys.invalidate()
         if let focusObserver {
             DistributedNotificationCenter.default().removeObserver(focusObserver)
@@ -251,6 +295,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let pin = addBoundItem(menu, title: "Pin Open", action: #selector(togglePin), binding: hk.pinOpen)
         pin.state = store.preferences.pinOpen ? .on : .off
+
+        if let message = [store.configurationError, store.safeAreaError, store.lastLaunchError].compactMap({ $0 }).first {
+            let problem = NSMenuItem(title: "⚠ (message)", action: #selector(openSettings), keyEquivalent: "")
+            problem.target = self
+            problem.toolTip = message
+            menu.addItem(problem)
+        }
 
         menu.addItem(.separator())
 
@@ -466,6 +517,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let request = LaunchResolver.resolve(slot: slot)
         if request.kind == .application || request.kind == .file, !request.resolvedTarget.isEmpty {
             return NSWorkspace.shared.icon(forFile: request.resolvedTarget)
+        }
+        if request.kind == .url {
+            return NSImage(systemSymbolName: "link", accessibilityDescription: slot.label)
         }
         return nil
     }

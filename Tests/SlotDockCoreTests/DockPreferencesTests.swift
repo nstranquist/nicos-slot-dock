@@ -17,6 +17,7 @@ struct DockPreferencesTests {
         #expect(p.autoHide == true)
         #expect(p.pinOpen == false)
         #expect(p.edgeHover == true)
+        #expect(p.showInFullScreen == true)
         #expect(p.edgeTriggerHeight == DockPreferences.defaultEdgeTriggerHeight)
         #expect(p.edgeTriggerHeight == 28)
         #expect(p.edgeHorizontalOvershoot == 48)
@@ -39,6 +40,23 @@ struct DockPreferencesTests {
         #expect(p.hotkeys.toggleDock.enabled == false)
         #expect(KeyBinding.unbound.displayString == "Off")
         #expect(KeyBinding(keyEquivalent: "d", command: true, enabled: true).displayString == "⌘D")
+        #expect(KeyBinding(keyEquivalent: "<f1>", command: true, enabled: true).displayString == "⌘<F1>")
+        #expect(KeyBinding(keyEquivalent: "<up>", command: true, enabled: true).displayString == "⌘↑")
+    }
+
+    @Test("auto-hidden strip retains a recovery affordance")
+    func recoveryAffordance() {
+        var preferences = DockPreferences.default
+        preferences.showStatusItem = false
+        preferences.edgeHover = false
+        preferences.hotkeys = .default
+        preferences.sanitize()
+        #expect(preferences.showStatusItem == true)
+
+        preferences.showStatusItem = false
+        preferences.hotkeys.toggleDock.enabled = true
+        preferences.sanitize()
+        #expect(preferences.showStatusItem == false)
     }
 
     @Test("clamp edge overshoot, reveal duration, icon spacing")
@@ -111,7 +129,13 @@ struct DockPreferencesTests {
         #expect(Double(tight.maxY) == 122)
 
         // Missing field decodes as prior 8 pt.
-        let decoded = try! JSONDecoder().decode(DockPreferences.self, from: Data(#"{"autoHide":true}"#.utf8))
+        guard let decoded = try? JSONDecoder().decode(
+            DockPreferences.self,
+            from: Data(#"{"autoHide":true}"#.utf8)
+        ) else {
+            Issue.record("expected legacy preferences to decode")
+            return
+        }
         #expect(decoded.autoHideLeaveMargin == 8)
 
         // End-to-end policy: expanded + 3pt above strip with margin 2 → leave (do not hold).
@@ -267,6 +291,14 @@ struct DockPreferencesTests {
         #expect(DockPreferences.clampDelay(1.2) == 1.2)
         #expect(DockPreferences.minAutoHideDelay == 0.1)
         #expect(DockPreferences.maxAutoHideDelay == 3.0)
+    }
+
+    @Test("non-finite numeric preferences fall back to safe defaults")
+    func nonFiniteFallbacks() {
+        #expect(DockPreferences.clampDelay(.nan) == DockPreferences.default.autoHideDelay)
+        #expect(DockPreferences.clampEdgeTriggerHeight(.infinity) == DockPreferences.default.edgeTriggerHeight)
+        #expect(DockPreferences.clampIconSpacing(-.infinity) == DockPreferences.default.iconSpacing)
+        #expect(DockPreferences.clampSafeAreaExtraGap(.nan) == 8)
     }
 
     @Test("clampEdgeTriggerHeight bounds values")

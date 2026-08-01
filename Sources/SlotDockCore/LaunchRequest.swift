@@ -31,7 +31,12 @@ public enum LaunchResolver {
     /// - Parameter fileExists: injectable existence check for tests.
     public static func resolve(
         slot: Slot,
-        fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+        fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
+        fileIsDirectory: (String) -> Bool = { path in
+            var isDirectory: ObjCBool = false
+            _ = FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
+            return isDirectory.boolValue
+        }
     ) -> LaunchRequest {
         let trimmed = slot.target.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -44,12 +49,14 @@ public enum LaunchResolver {
             )
         }
 
-        // URL schemes (http, https, file, custom)
+        // URL schemes (http, https, file, custom). Syntax is validated here;
+        // NSWorkspace remains the authority for whether a handler is installed.
         if let url = URL(string: trimmed),
            let scheme = url.scheme?.lowercased(),
            scheme != "file",
            scheme.count >= 2,
-           !trimmed.hasPrefix("/")
+           !trimmed.hasPrefix("/"),
+           (scheme != "http" && scheme != "https" || url.host != nil)
         {
             return LaunchRequest(
                 slotID: slot.id,
@@ -70,8 +77,12 @@ public enum LaunchResolver {
 
         // file:// URL
         if let url = URL(string: expanded), url.isFileURL {
-            let path = url.path
-            let kind: LaunchRequest.Kind = path.hasSuffix(".app") ? .application : .file
+            let path = url.standardizedFileURL.path
+            let kind: LaunchRequest.Kind = Self.applicationKind(
+                path: path,
+                fileExists: fileExists,
+                fileIsDirectory: fileIsDirectory
+            )
             return LaunchRequest(
                 slotID: slot.id,
                 label: slot.label,
@@ -81,16 +92,42 @@ public enum LaunchResolver {
             )
         }
 
-        let kind: LaunchRequest.Kind = expanded.hasSuffix(".app") || expanded.hasSuffix(".app/")
-            ? .application
-            : .file
+        let wasAbsolutePath = expanded.hasPrefix("/")
+        let normalizedPath = URL(fileURLWithPath: expanded).standardizedFileURL.path
+        let kind: LaunchRequest.Kind = wasAbsolutePath
+            ? Self.applicationKind(
+                path: normalizedPath,
+                fileExists: fileExists,
+                fileIsDirectory: fileIsDirectory
+            )
+            // Keep the semantic kind useful for the error UI, but never let
+            // a cwd-dependent relative target become a valid launch request.
+            : (Self.isApplicationPath(normalizedPath) ? .application : .file)
         return LaunchRequest(
             slotID: slot.id,
             label: slot.label,
             kind: kind,
-            resolvedTarget: expanded,
-            isValid: fileExists(expanded)
+            resolvedTarget: normalizedPath,
+            // Slot paths are documented as absolute. Refuse cwd-dependent
+            // relative paths rather than persisting an unstable launch target.
+            isValid: wasAbsolutePath && fileExists(normalizedPath)
         )
+    }
+
+    private static func isApplicationPath(_ path: String) -> Bool {
+        path.lowercased().hasSuffix(".app")
+    }
+
+    private static func applicationKind(
+        path: String,
+        fileExists: (String) -> Bool,
+        fileIsDirectory: (String) -> Bool
+    ) -> LaunchRequest.Kind {
+        guard isApplicationPath(path) else { return .file }
+        // Preserve application classification for missing `.app` targets so
+        // the UI can explain a missing app, but never launch a regular file as
+        // an application when the path exists.
+        return !fileExists(path) || fileIsDirectory(path) ? .application : .file
     }
 
     /// Open invocation payload — what the UI layer would hand to NSWorkspace / open.

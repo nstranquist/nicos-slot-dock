@@ -48,6 +48,22 @@ struct ScreenGeometryTests {
         #expect(abs(f.maxX - (screenB.visibleFrame.maxX - 20)) < 1)
     }
 
+    @Test("stripFrame stays inside a narrow display")
+    func narrowDisplay() {
+        let visible = CGRect(x: 0, y: 0, width: 160, height: 600)
+        let f = ScreenGeometry.stripFrame(
+            visible: visible,
+            height: 64,
+            width: 400,
+            alignment: .center,
+            horizontalMargin: 24,
+            bottomInset: 0
+        )
+        #expect(f.minX >= visible.minX)
+        #expect(f.maxX <= visible.maxX)
+        #expect(f.width == 112)
+    }
+
     @Test("near bottom edge hit test")
     func nearBottom() {
         let v = screenA.visibleFrame

@@ -154,6 +154,24 @@ struct SafeAreaPaddingTests {
         #expect(plan.apply.isEmpty)
     }
 
+    @Test("off-screen ledger entries are restored while padding is active")
+    func restoresOffScreenLedger() {
+        let record = PadRecord(
+            windowID: "off-screen",
+            originalFrame: CGRect(x: 0, y: 10, width: 400, height: 300),
+            paddedFrame: CGRect(x: 0, y: 110, width: 400, height: 300),
+            appliedDeltaY: 100
+        )
+        let plan = SafeAreaPlanner.plan(
+            need: .active,
+            windows: [],
+            band: band,
+            ledger: [record.windowID: record]
+        )
+        #expect(plan.restore.map(\.windowID) == [record.windowID])
+        #expect(plan.nextLedger[record.windowID] == nil)
+    }
+
     @Test("two-step apply then re-plan does not stack or undo")
     func twoStepApplyReplan() {
         let low = WindowFrameSnapshot(id: "w1", frame: CGRect(x: 0, y: 50, width: 400, height: 300))

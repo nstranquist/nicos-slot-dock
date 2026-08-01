@@ -21,6 +21,51 @@ struct DropPathResolverTests {
         #expect(c.target == "https://example.com/path")
     }
 
+    @Test("HTTP URL without a host is rejected")
+    func malformedHTTP() {
+        #expect(DropPathResolver.resolve("https://") == .reject("URL needs a host"))
+    }
+
+    @Test("application suffix matching is case insensitive")
+    func uppercaseApplicationSuffix() {
+        let o = DropPathResolver.resolve("/tmp/Example.APP")
+        guard case .accept(let candidate) = o else {
+            Issue.record("expected uppercase app suffix to be accepted")
+            return
+        }
+        #expect(candidate.label == "Example")
+    }
+
+    @Test("existing regular file named app is rejected")
+    func regularAppFileRejected() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("slot-dock-not-an-app-\(UUID().uuidString).app")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Data("not an application bundle".utf8).write(to: url)
+        #expect(DropPathResolver.resolve(url.path) == .reject("Application bundle is not a directory: \(url.lastPathComponent)"))
+    }
+
+    @Test("UTF-8 Internet Shortcut resolves to its URL")
+    func internetShortcut() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("slot-dock-shortcut-\(UUID().uuidString).url")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Data("[InternetShortcut]\nURL=https://example.com/docs\n".utf8).write(to: url)
+        #expect(DropPathResolver.resolve(url.path) == .accept(.init(
+            label: url.deletingPathExtension().lastPathComponent,
+            target: "https://example.com/docs"
+        )))
+    }
+
+    @Test("non-UTF-8 Internet Shortcut is rejected explicitly")
+    func invalidInternetShortcutEncoding() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("slot-dock-shortcut-\(UUID().uuidString).url")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Data([0xFF, 0xFE, 0x00, 0x01]).write(to: url)
+        #expect(DropPathResolver.resolve(url.path) == .reject("Internet Shortcut is not valid UTF-8: \(url.lastPathComponent)"))
+    }
+
     @Test("existing app path accepted")
     func appPath() {
         let path = "/System/Applications/Utilities/Terminal.app"

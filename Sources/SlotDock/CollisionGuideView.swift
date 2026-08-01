@@ -7,6 +7,7 @@ struct CollisionGuideView: View {
     @ObservedObject var store: SlotDockStore
     @State private var statusMessage: String?
     @State private var backupSummary: String?
+    @State private var isRunning = false
 
     private let guide = CollisionGuide.default
 
@@ -78,7 +79,7 @@ struct CollisionGuideView: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
-                    .disabled(action.id == "restore-dock-prefs" && !SystemDockPrefsBackup.hasBackup)
+                    .disabled(isRunning || (action.id == "restore-dock-prefs" && !SystemDockPrefsBackup.hasBackup))
                 }
                 .padding(.vertical, 2)
             }
@@ -159,10 +160,16 @@ struct CollisionGuideView: View {
                 statusMessage = "No snapshot to restore."
                 return
             }
+            let conflictWarning: String = {
+                guard let saved = SystemDockPrefsBackup.load() else { return "" }
+                let current = SystemDockPrefsBackup.capture(note: "conflict check")
+                guard !saved.managedValuesEqual(to: current) else { return "" }
+                return "The current Dock values differ from this older snapshot. Restoring will overwrite those newer values.\n\n"
+            }()
             confirmAndRunShell(
                 script,
                 title: action.title,
-                preamble: "This restores your saved Dock prefs (autohide / delay) from:\n\(SystemDockPrefsBackup.backupURL.path)\n\n"
+                preamble: "\(conflictWarning)This restores your saved Dock prefs (autohide / delay) from:\n\(SystemDockPrefsBackup.backupURL.path)\n\n"
             )
             SlotDockTelemetry.preferences.info("Collision action \(action.id, privacy: .public)")
             return
@@ -191,9 +198,11 @@ struct CollisionGuideView: View {
             store.openMacDockSettings()
             statusMessage = "Opened System Settings (Desktop & Dock)."
         case .appleScript:
-            _ = SystemDockPrefsBackup.ensureBackupBeforeMutation(note: "before \(action.id)")
-            refreshBackupSummary()
-            confirmAndRunAppleScript(action.payload, title: action.title)
+            confirmAndRunAppleScript(
+                action.payload,
+                title: action.title,
+                ensureSnapshotNote: "before \(action.id)"
+            )
         case .defaultsCommand:
             confirmAndRunShell(
                 action.payload,
@@ -208,7 +217,11 @@ struct CollisionGuideView: View {
         SlotDockTelemetry.preferences.info("Collision action \(action.id, privacy: .public)")
     }
 
-    private func confirmAndRunAppleScript(_ source: String, title: String) {
+    private func confirmAndRunAppleScript(
+        _ source: String,
+        title: String,
+        ensureSnapshotNote: String? = nil
+    ) {
         let alert = NSAlert()
         alert.messageText = title
         alert.informativeText = """
@@ -225,13 +238,34 @@ struct CollisionGuideView: View {
             statusMessage = "Cancelled."
             return
         }
-        var error: NSDictionary?
-        if let script = NSAppleScript(source: source) {
-            _ = script.executeAndReturnError(&error)
-            if let error {
-                statusMessage = "Script error: \(error[NSAppleScript.errorMessage] ?? "unknown")"
+        if let ensureSnapshotNote,
+           SystemDockPrefsBackup.ensureBackupBeforeMutation(note: ensureSnapshotNote) == nil
+        {
+            statusMessage = "Could not save a Dock preference snapshot; nothing was changed."
+            return
+        }
+        refreshBackupSummary()
+        isRunning = true
+        statusMessage = "Updating system Dock…"
+        DispatchQueue.global(qos: .userInitiated).async {
+            var error: NSDictionary?
+            if let script = NSAppleScript(source: source) {
+                let result = script.executeAndReturnError(&error)
+                if error == nil, result.stringValue?.hasPrefix("ERROR:") == true {
+                    error = [NSAppleScript.errorMessage: result.stringValue ?? "AppleScript returned an error."]
+                }
             } else {
-                statusMessage = "System Dock preference updated."
+                error = [NSAppleScript.errorMessage: "Could not create AppleScript."]
+            }
+            let message: String
+            if let error {
+                message = "Script error: \(error[NSAppleScript.errorMessage] ?? "unknown")"
+            } else {
+                message = "System Dock preference updated."
+            }
+            DispatchQueue.main.async {
+                isRunning = false
+                statusMessage = message
             }
         }
     }
@@ -268,22 +302,32 @@ struct CollisionGuideView: View {
             return
         }
         if let note = ensureSnapshotNote {
-            _ = SystemDockPrefsBackup.ensureBackupBeforeMutation(note: note)
+            guard SystemDockPrefsBackup.ensureBackupBeforeMutation(note: note) != nil else {
+                statusMessage = "Could not save a Dock preference snapshot; nothing was changed."
+                return
+            }
             refreshBackupSummary()
         }
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        task.arguments = ["-c", script]
-        do {
-            try task.run()
-            task.waitUntilExit()
-            if task.terminationStatus == 0 {
-                statusMessage = "Done. System Dock restarted."
-            } else {
-                statusMessage = "Shell exited \(task.terminationStatus). Try Copy Only and run in Terminal."
+        isRunning = true
+        statusMessage = "Running compatibility command…"
+        DispatchQueue.global(qos: .userInitiated).async {
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/bin/zsh")
+            task.arguments = ["-c", script]
+            let message: String
+            do {
+                try task.run()
+                task.waitUntilExit()
+                message = task.terminationStatus == 0
+                    ? "Done. System Dock restarted."
+                    : "Shell exited \(task.terminationStatus). Try Copy Only and run in Terminal."
+            } catch {
+                message = "Could not run shell: \(error.localizedDescription)"
             }
-        } catch {
-            statusMessage = "Could not run shell: \(error.localizedDescription)"
+            DispatchQueue.main.async {
+                isRunning = false
+                statusMessage = message
+            }
         }
     }
 }

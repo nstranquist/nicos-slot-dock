@@ -19,6 +19,8 @@ final class SlotDockStore: ObservableObject {
     /// When set, Settings → Slots should focus this custom slot for editing.
     @Published var pendingEditSlotID: String?
     @Published var lastLaunchError: String?
+    @Published var configurationError: String?
+    @Published var safeAreaError: String?
     @Published var launchFlashSlotID: String?
     /// Last global-hotkey registration report (Carbon failures surface here for Settings).
     @Published private(set) var hotkeyReport = HotkeyRegistrationReport()
@@ -41,6 +43,8 @@ final class SlotDockStore: ObservableObject {
     private let systemDockPlistURL: URL
     private var flashClearWork: DispatchWorkItem?
 
+    var configurationReadOnly: Bool { core.isReadOnly }
+
     init(
         configURL: URL = SlotStore.defaultConfigURL(),
         openHandler: ((OpenPayload) -> Bool)? = nil,
@@ -51,6 +55,7 @@ final class SlotDockStore: ObservableObject {
         self.systemDockPlistURL = systemDockPlistURL
         self.slots = core.slots
         self.preferences = core.preferences
+        self.configurationError = core.lastError?.localizedDescription
         if slots.isEmpty {
             seedDefaultsIfEmpty()
         }
@@ -58,9 +63,10 @@ final class SlotDockStore: ObservableObject {
     }
 
     func reload() {
-        core.reload()
+        _ = core.reload()
         slots = core.slots
         preferences = core.preferences
+        configurationError = core.lastError?.localizedDescription
         refreshSystemDock()
     }
 
@@ -117,23 +123,24 @@ final class SlotDockStore: ObservableObject {
 
     private func afterSlotsChanged() {
         slots = core.slots
+        configurationError = core.lastError?.localizedDescription
         recomposeDisplay()
     }
 
     // MARK: - Slots
 
     @discardableResult
-    func addSlot(label: String, target: String, iconPath: String? = nil) -> Slot {
+    func addSlot(label: String, target: String, iconPath: String? = nil) -> Slot? {
         let slot = core.add(label: label, target: target, iconPath: iconPath)
         afterSlotsChanged()
-        return slot
+        return core.lastError == nil ? slot : nil
     }
 
     @discardableResult
     func updateSlot(id: String, label: String?, target: String?, iconPath: String??) -> Slot? {
         let updated = core.update(id: id, label: label, target: target, iconPath: iconPath)
         afterSlotsChanged()
-        return updated
+        return core.lastError == nil ? updated : nil
     }
 
     @discardableResult
@@ -166,9 +173,9 @@ final class SlotDockStore: ObservableObject {
     @discardableResult
     func importSystemDockEntry(_ entry: SystemDockEntry) -> Slot? {
         guard !SlotComposer.isAlreadyCustom(entry: entry, custom: slots) else { return nil }
-        let slot = core.add(label: entry.label, target: entry.path)
-        afterSlotsChanged()
-        SlotDockTelemetry.systemDock.info("Imported system Dock app \(entry.label, privacy: .public)")
+        let slot = addSlot(label: entry.label, target: entry.path)
+        guard let slot else { return nil }
+        SlotDockTelemetry.systemDock.info("Imported system Dock app \(entry.label, privacy: .private)")
         return slot
     }
 
@@ -184,29 +191,32 @@ final class SlotDockStore: ObservableObject {
             entry: SystemDockEntry(label: decoded.label, path: decoded.path),
             custom: slots
         ) else { return nil }
-        let slot = core.add(label: decoded.label, target: decoded.path)
-        afterSlotsChanged()
-        return slot
+        return addSlot(label: decoded.label, target: decoded.path)
     }
 
     /// Copy system Dock apps into durable custom slots (skip duplicates).
     @discardableResult
     func importSystemDockAsCustomSlots() -> Int {
         let importable = SlotComposer.importableSystemEntries(system: systemDockEntries, custom: slots)
+        var imported = 0
         for entry in importable {
-            _ = core.add(label: entry.label, target: entry.path)
+            if addSlot(label: entry.label, target: entry.path) != nil {
+                imported += 1
+            }
         }
-        afterSlotsChanged()
-        SlotDockTelemetry.systemDock.info("Imported \(importable.count, privacy: .public) system Dock apps as custom slots")
-        return importable.count
+        SlotDockTelemetry.systemDock.info("Imported \(imported, privacy: .public) system Dock apps as custom slots")
+        return imported
     }
 
     // MARK: - Preferences
 
-    func updatePreferences(_ mutate: (inout DockPreferences) -> Void) {
+    @discardableResult
+    func updatePreferences(_ mutate: (inout DockPreferences) -> Void) -> Bool {
         preferences = core.updatePreferences(mutate)
+        configurationError = core.lastError?.localizedDescription
         recomposeDisplay()
         SlotDockTelemetry.preferences.debug("Preferences updated")
+        return core.lastError == nil
     }
 
     func setSystemDockIntegration(_ mode: SystemDockIntegration) {
@@ -224,13 +234,15 @@ final class SlotDockStore: ObservableObject {
     }
 
     func setSafeAreaPadding(_ on: Bool) {
-        updatePreferences { $0.safeAreaPadding = on }
-        NotificationCenter.default.post(name: .slotDockSafeAreaPreferenceDidChange, object: nil)
+        if updatePreferences({ $0.safeAreaPadding = on }) {
+            NotificationCenter.default.post(name: .slotDockSafeAreaPreferenceDidChange, object: nil)
+        }
     }
 
     func setSafeAreaExtraGap(_ gap: Double) {
-        updatePreferences { $0.safeAreaExtraGap = gap }
-        NotificationCenter.default.post(name: .slotDockSafeAreaPreferenceDidChange, object: nil)
+        if updatePreferences({ $0.safeAreaExtraGap = gap }) {
+            NotificationCenter.default.post(name: .slotDockSafeAreaPreferenceDidChange, object: nil)
+        }
     }
 
     func dismissCollisionGuide() {
@@ -242,22 +254,24 @@ final class SlotDockStore: ObservableObject {
     }
 
     func setAutoHide(_ on: Bool) {
-        updatePreferences { $0.autoHide = on }
-        if on {
+        let persisted = updatePreferences { $0.autoHide = on }
+        if persisted, preferences.autoHide {
             NotificationCenter.default.post(name: .slotDockCollisionPromptMayNeed, object: nil)
         }
     }
 
     func setPinOpen(_ on: Bool) {
-        updatePreferences {
+        let persisted = updatePreferences {
             $0.pinOpen = on
             if on { $0.autoHide = false }
         }
-        if on, !reveal.isRevealed {
+        if preferences.pinOpen, !reveal.isRevealed {
             beginReveal()
         }
-        NotificationCenter.default.post(name: .slotDockSafeAreaPreferenceDidChange, object: nil)
-        if on {
+        if persisted {
+            NotificationCenter.default.post(name: .slotDockSafeAreaPreferenceDidChange, object: nil)
+        }
+        if persisted, preferences.pinOpen {
             NotificationCenter.default.post(name: .slotDockCollisionPromptMayNeed, object: nil)
         }
     }
@@ -312,7 +326,10 @@ final class SlotDockStore: ObservableObject {
             }
         }
         // Fallback: open System Settings app
-        NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/System Settings.app"))
+        let fallback = URL(fileURLWithPath: "/System/Applications/System Settings.app")
+        if !NSWorkspace.shared.open(fallback) {
+            lastLaunchError = "Could not open macOS System Settings."
+        }
     }
 
     func setAlignment(_ alignment: DockPreferences.Alignment) {
@@ -336,16 +353,39 @@ final class SlotDockStore: ObservableObject {
     }
 
     func setShowStatusItem(_ on: Bool) {
-        updatePreferences { $0.showStatusItem = on }
-        NotificationCenter.default.post(name: .slotDockStatusItemPreferenceDidChange, object: nil)
+        if updatePreferences({ $0.showStatusItem = on }) {
+            NotificationCenter.default.post(name: .slotDockStatusItemPreferenceDidChange, object: nil)
+        }
+    }
+
+    func setShowInFullScreen(_ on: Bool) {
+        if updatePreferences({ $0.showInFullScreen = on }) {
+            NotificationCenter.default.post(name: .slotDockWindowBehaviorDidChange, object: nil)
+        }
     }
 
     /// Persist launch-at-login desire and apply SMAppService when possible.
     /// Returns an optional user-facing status/error string.
     @discardableResult
     func setLaunchAtLogin(_ on: Bool) -> String? {
+        guard !core.isReadOnly else {
+            let message = core.lastError?.localizedDescription ?? "Configuration is read-only."
+            configurationError = message
+            return message
+        }
         updatePreferences { $0.launchAtLogin = on }
+        if let error = core.lastError {
+            let message = error.localizedDescription
+            configurationError = message
+            lastLaunchError = message
+            return message
+        }
         let msg = LaunchAtLogin.applyPreference(on)
+        if let msg, !msg.isEmpty {
+            lastLaunchError = msg
+        } else if configurationError == nil {
+            lastLaunchError = nil
+        }
         SlotDockTelemetry.preferences.info(
             "launchAtLogin=\(on, privacy: .public) status=\(LaunchAtLogin.status.description, privacy: .public)"
         )
@@ -354,7 +394,15 @@ final class SlotDockStore: ObservableObject {
 
     /// Apply persisted preference at launch (no write if already matching).
     func syncLaunchAtLoginFromPreferences() {
-        _ = LaunchAtLogin.applyPreference(preferences.launchAtLogin)
+        guard !core.isReadOnly else {
+            configurationError = core.lastError?.localizedDescription
+            return
+        }
+        let msg = LaunchAtLogin.applyPreference(preferences.launchAtLogin)
+        if let msg, !msg.isEmpty {
+            lastLaunchError = msg
+            SlotDockTelemetry.preferences.warning("Launch-at-login sync failed: \(msg, privacy: .private)")
+        }
     }
 
     /// Drop handler: resolve raw path/URL and append custom slot (skip exact target dupes).
@@ -368,7 +416,11 @@ final class SlotDockStore: ObservableObject {
                 lastLaunchError = "Already on strip: \(c.label)"
                 return .reject("Already on strip: \(c.label)")
             }
-            _ = addSlot(label: c.label, target: c.target)
+            guard addSlot(label: c.label, target: c.target) != nil else {
+                let reason = configurationError ?? "Could not save the dropped slot."
+                lastLaunchError = reason
+                return .reject(reason)
+            }
             lastLaunchError = nil
             return outcome
         case .reject(let reason):
@@ -391,8 +443,8 @@ final class SlotDockStore: ObservableObject {
         let request = LaunchResolver.resolve(slot: slot)
         let path = request.resolvedTarget
         guard !path.isEmpty else { return }
-        if request.kind == .url, let url = URL(string: path) {
-            _ = openHandler(OpenPayload(url: url, path: nil, kind: .url))
+        if request.kind == .url {
+            lastLaunchError = "URLs cannot be revealed in Finder. Use Open instead."
             return
         }
         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
@@ -534,13 +586,28 @@ final class SlotDockStore: ObservableObject {
             lastLaunchError = "Open at Login is only available for applications."
             return false
         }
-        switch TargetAppLoginItem.setEnabled(appPath: request.resolvedTarget, enabled: enabled) {
+        let path = request.resolvedTarget
+        lastLaunchError = "Updating Open at Login…"
+        Task { @MainActor [weak self] in
+            let result = await Task.detached(priority: .userInitiated) {
+                TargetAppLoginItem.setEnabled(appPath: path, enabled: enabled)
+            }.value
+            self?.finishOpenAtLogin(result, slot: slot, enabled: enabled)
+        }
+        return true
+    }
+
+    private func finishOpenAtLogin(
+        _ result: Result<Void, TargetAppLoginItem.LoginError>,
+        slot: Slot,
+        enabled: Bool
+    ) {
+        switch result {
         case .success:
             lastLaunchError = nil
             SlotDockTelemetry.preferences.info(
-                "Open at Login \(enabled ? "on" : "off") for \(slot.label, privacy: .public)"
+                "Open at Login \(enabled ? "on" : "off") for \(slot.label, privacy: .private)"
             )
-            return true
         case .failure(let err):
             let message = err.errorDescription ?? "Open at Login failed"
             lastLaunchError = message
@@ -548,14 +615,13 @@ final class SlotDockStore: ObservableObject {
                 // Actionable path: open Privacy so grant is one click away.
                 TargetAppLoginItem.openAutomationPrivacySettings()
                 SlotDockTelemetry.preferences.info(
-                    "Open at Login needs Automation permission for \(slot.label, privacy: .public)"
+                    "Open at Login needs Automation permission for \(slot.label, privacy: .private)"
                 )
             } else {
                 SlotDockTelemetry.preferences.warning(
-                    "Open at Login failed: \(message, privacy: .public)"
+                    "Open at Login failed: \(message, privacy: .private)"
                 )
             }
-            return false
         }
     }
 
@@ -574,7 +640,7 @@ final class SlotDockStore: ObservableObject {
         ) else { return false }
         core.replaceAll(next)
         afterSlotsChanged()
-        return true
+        return core.lastError == nil
     }
 
     @discardableResult
@@ -587,7 +653,7 @@ final class SlotDockStore: ObservableObject {
         ) else { return false }
         core.replaceAll(next)
         afterSlotsChanged()
-        return true
+        return core.lastError == nil
     }
 
     @discardableResult
@@ -643,21 +709,21 @@ final class SlotDockStore: ObservableObject {
     func runningApplications(for slotID: String) -> [NSRunningApplication] {
         guard let slot = slot(for: slotID) else { return [] }
         let identity = AppIdentity.from(slot: slot)
-        return NSWorkspace.shared.runningApplications.filter { app in
-            if let b = identity.bundleIdentifier?.lowercased(),
-               let ab = app.bundleIdentifier?.lowercased(),
-               b == ab
-            {
-                return true
+        let running = NSWorkspace.shared.runningApplications
+        if let path = identity.path?.lowercased(), !path.isEmpty {
+            let exact = running.filter { app in
+                guard let url = app.bundleURL else { return false }
+                return SystemDockEntry.normalizePath(url.path).lowercased() == path
             }
-            if let p = identity.path,
-               let url = app.bundleURL
-            {
-                let appPath = SystemDockEntry.normalizePath(url.path).lowercased()
-                return appPath == p.lowercased()
-            }
-            return false
+            // A system Dock identity may carry both bundle and path. Do not
+            // hide/quit every copy sharing the bundle when one exact target is
+            // available; fall back to bundle matching only if the path is stale.
+            if !exact.isEmpty { return exact }
         }
+        guard let bundle = identity.bundleIdentifier?.lowercased(), !bundle.isEmpty else {
+            return []
+        }
+        return running.filter { $0.bundleIdentifier?.lowercased() == bundle }
     }
 
     private func copyToPasteboard(_ string: String) {
@@ -666,17 +732,18 @@ final class SlotDockStore: ObservableObject {
     }
 
     func setHotkeys(_ hotkeys: DockHotkeys) {
-        updatePreferences {
+        let persisted = updatePreferences {
             var h = hotkeys
             h.sanitize()
             $0.hotkeys = h
         }
-        notifyHotkeysChanged()
+        if persisted { notifyHotkeysChanged() }
     }
 
     func setHotkeysGlobal(_ on: Bool) {
-        updatePreferences { $0.hotkeys.globalEnabled = on }
-        notifyHotkeysChanged()
+        if updatePreferences({ $0.hotkeys.globalEnabled = on }) {
+            notifyHotkeysChanged()
+        }
     }
 
     func notifyHotkeysChanged() {
@@ -687,15 +754,23 @@ final class SlotDockStore: ObservableObject {
     func applyHotkeyReport(_ report: HotkeyRegistrationReport) {
         hotkeyReport = report
         if report.hasProblems {
-            SlotDockTelemetry.hotkey.warning("store hotkey report: \(report.userSummary, privacy: .public)")
+            SlotDockTelemetry.hotkey.warning("store hotkey report: \(report.userSummary, privacy: .private)")
         }
     }
 
     func resetPreferences() {
-        core.setPreferences(.default)
+        let persisted = core.setPreferences(.default)
         preferences = core.preferences
+        configurationError = core.lastError?.localizedDescription
+        recomposeDisplay()
+        _ = refreshSystemDock()
+        guard persisted else { return }
+        syncLaunchAtLoginFromPreferences()
         notifyHotkeysChanged()
         NotificationCenter.default.post(name: .slotDockStatusItemPreferenceDidChange, object: nil)
+        NotificationCenter.default.post(name: .slotDockWindowBehaviorDidChange, object: nil)
+        NotificationCenter.default.post(name: .slotDockSafeAreaPreferenceDidChange, object: nil)
+        NotificationCenter.default.post(name: .slotDockCollisionPromptMayNeed, object: nil)
     }
 
     // MARK: - Launch
@@ -707,14 +782,14 @@ final class SlotDockStore: ObservableObject {
                 ?? slots.first(where: { $0.id == slotID }).map({ SlotComposer.Item(slot: $0, origin: .custom) })
         else {
             lastLaunchError = "Slot not found"
-            SlotDockTelemetry.launch.error("Launch miss id=\(slotID, privacy: .public)")
+            SlotDockTelemetry.launch.error("Launch miss id=\(slotID, privacy: .private)")
             return false
         }
         let slot = item.slot
         let request = LaunchResolver.resolve(slot: slot)
         guard let payload = LaunchResolver.openPayload(for: request) else {
             lastLaunchError = "Cannot open “\(slot.label)”: invalid target"
-            SlotDockTelemetry.launch.warning("Invalid target for \(slot.label, privacy: .public)")
+            SlotDockTelemetry.launch.warning("Invalid target for \(slot.label, privacy: .private)")
             return false
         }
         if preferences.launchFeedback {
@@ -723,11 +798,11 @@ final class SlotDockStore: ObservableObject {
         let ok = openHandler(payload)
         if !ok {
             lastLaunchError = "Failed to open “\(slot.label)”"
-            SlotDockTelemetry.launch.error("Open failed \(slot.label, privacy: .public)")
+            SlotDockTelemetry.launch.error("Open failed \(slot.label, privacy: .private)")
         } else {
             lastLaunchError = nil
             SlotDockTelemetry.launch.info(
-                "Launched \(slot.label, privacy: .public) origin=\(item.origin.rawValue, privacy: .public)"
+                "Launched \(slot.label, privacy: .private) origin=\(item.origin.rawValue, privacy: .public)"
             )
         }
         return ok
@@ -842,13 +917,19 @@ final class SlotDockStore: ObservableObject {
     }
 
     private static func defaultOpen(_ payload: OpenPayload) -> Bool {
-        NSWorkspace.shared.open(payload.url)
+        if payload.kind == .url,
+           NSWorkspace.shared.urlForApplication(toOpen: payload.url) == nil
+        {
+            return false
+        }
+        return NSWorkspace.shared.open(payload.url)
     }
 }
 
 extension Notification.Name {
     static let slotDockHotkeysDidChange = Notification.Name("slotDockHotkeysDidChange")
     static let slotDockStatusItemPreferenceDidChange = Notification.Name("slotDockStatusItemPreferenceDidChange")
+    static let slotDockWindowBehaviorDidChange = Notification.Name("slotDockWindowBehaviorDidChange")
     static let slotDockSafeAreaPreferenceDidChange = Notification.Name("slotDockSafeAreaPreferenceDidChange")
     static let slotDockCollisionPromptMayNeed = Notification.Name("slotDockCollisionPromptMayNeed")
     static let slotDockRequestAccessibility = Notification.Name("slotDockRequestAccessibility")

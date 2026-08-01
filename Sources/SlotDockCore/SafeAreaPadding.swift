@@ -41,8 +41,8 @@ public struct ScreenBottomBand: Equatable, Sendable {
 
     public init(visibleFrame: CGRect, padHeight: CGFloat, extraGap: CGFloat = 8) {
         self.visibleFrame = visibleFrame
-        self.padHeight = max(0, padHeight)
-        self.extraGap = max(0, extraGap)
+        self.padHeight = padHeight.isFinite ? max(0, padHeight) : 0
+        self.extraGap = extraGap.isFinite ? max(0, extraGap) : 0
     }
 
     /// Y threshold: windows whose bottom edge is below this may need padding.
@@ -214,7 +214,12 @@ public enum SafeAreaPlanner {
         // already-padded live frame (which would look "clear" and undo the pad).
         for (id, record) in ledger {
             guard windowByID[id] != nil else {
-                // Window gone — drop ledger entry (nothing to restore on screen)
+                // The caller enumerates the display currently hosting the strip.
+                // A missing ledger entry is therefore no longer under this
+                // display's clearance band (or has disappeared). Restore it by
+                // stable identity; the AppKit bridge retains failed restores for
+                // a later retry.
+                restore.append(RestoreChange(windowID: id, to: record.originalFrame))
                 nextLedger.removeValue(forKey: id)
                 continue
             }

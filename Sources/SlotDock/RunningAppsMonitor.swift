@@ -144,7 +144,7 @@ final class RunningAppsMonitor: ObservableObject {
             }
 
             // Only .app bundles as transient strip icons (not helpers without a path).
-            guard path.hasSuffix(".app"), !path.isEmpty else { continue }
+            guard path.lowercased().hasSuffix(".app"), !path.isEmpty else { continue }
             let info = RunningAppInfo(bundleIdentifier: bundle, path: path, name: name)
             guard !seenIDs.contains(info.id) else { continue }
             seenIDs.insert(info.id)

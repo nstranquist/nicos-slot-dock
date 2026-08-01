@@ -66,32 +66,37 @@ public struct SystemDockPrefsSnapshot: Codable, Equatable, Sendable {
     /// Shell that restores this snapshot then restarts Dock.
     public func restoreScript() -> String {
         var lines: [String] = [
+            "set -euo pipefail",
             "# Restore com.apple.dock prefs from Slot Dock snapshot",
             "# captured \(ISO8601DateFormatter().string(from: capturedAt))",
         ]
         if let note, !note.isEmpty {
-            lines.append("# note: \(note)")
+            // Every physical line remains a shell comment. Backup metadata is
+            // user-writable and must never become executable shell text.
+            for line in note.split(whereSeparator: \.isNewline) {
+                lines.append("# note: \(line)")
+            }
         }
 
         if autohidePresent, let autohide {
-            lines.append("defaults write com.apple.dock autohide -bool \(autohide ? "true" : "false")")
+            lines.append("/usr/bin/defaults write com.apple.dock autohide -bool \(autohide ? "true" : "false")")
         } else {
-            lines.append("defaults delete com.apple.dock autohide 2>/dev/null || true")
+            lines.append("/usr/bin/defaults delete com.apple.dock autohide 2>/dev/null || true")
         }
 
-        if autohideDelayPresent, let autohideDelay {
-            lines.append("defaults write com.apple.dock autohide-delay -float \(autohideDelay)")
+        if autohideDelayPresent, let autohideDelay, autohideDelay.isFinite {
+            lines.append("/usr/bin/defaults write com.apple.dock autohide-delay -float \(autohideDelay)")
         } else {
-            lines.append("defaults delete com.apple.dock autohide-delay 2>/dev/null || true")
+            lines.append("/usr/bin/defaults delete com.apple.dock autohide-delay 2>/dev/null || true")
         }
 
-        if autohideTimeModifierPresent, let autohideTimeModifier {
-            lines.append("defaults write com.apple.dock autohide-time-modifier -float \(autohideTimeModifier)")
+        if autohideTimeModifierPresent, let autohideTimeModifier, autohideTimeModifier.isFinite {
+            lines.append("/usr/bin/defaults write com.apple.dock autohide-time-modifier -float \(autohideTimeModifier)")
         } else {
-            lines.append("defaults delete com.apple.dock autohide-time-modifier 2>/dev/null || true")
+            lines.append("/usr/bin/defaults delete com.apple.dock autohide-time-modifier 2>/dev/null || true")
         }
 
-        lines.append("killall Dock")
+        lines.append("/usr/bin/killall Dock")
         return lines.joined(separator: "\n") + "\n"
     }
 
@@ -103,6 +108,17 @@ public struct SystemDockPrefsSnapshot: Codable, Equatable, Sendable {
         lines.append("autohide-delay: \(describe(present: autohideDelayPresent, value: autohideDelay.map { String($0) }))")
         lines.append("autohide-time-modifier: \(describe(present: autohideTimeModifierPresent, value: autohideTimeModifier.map { String($0) }))")
         return lines.joined(separator: "\n")
+    }
+
+    /// Compare only the Dock keys Slot Dock owns. Capture time and note are
+    /// metadata, not conflict inputs.
+    public func managedValuesEqual(to other: SystemDockPrefsSnapshot) -> Bool {
+        autohidePresent == other.autohidePresent
+            && autohide == other.autohide
+            && autohideDelayPresent == other.autohideDelayPresent
+            && autohideDelay == other.autohideDelay
+            && autohideTimeModifierPresent == other.autohideTimeModifierPresent
+            && autohideTimeModifier == other.autohideTimeModifier
     }
 
     private func describe(present: Bool, value: String?) -> String {
@@ -121,16 +137,36 @@ public struct SystemDockPrefsSnapshot: Codable, Equatable, Sendable {
 
     @discardableResult
     public func save(to url: URL = defaultBackupURL) -> Bool {
+        var tempURL: URL?
+        defer {
+            if let tempURL, FileManager.default.fileExists(atPath: tempURL.path) {
+                _ = try? FileManager.default.removeItem(at: tempURL)
+            }
+        }
         do {
-            try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(),
+            let fileManager = FileManager.default
+            let directory = url.deletingLastPathComponent()
+            try fileManager.createDirectory(
+                at: directory,
                 withIntermediateDirectories: true
+            )
+            try fileManager.setAttributes(
+                [.posixPermissions: 0o700],
+                ofItemAtPath: directory.path
             )
             let enc = JSONEncoder()
             enc.outputFormatting = [.prettyPrinted, .sortedKeys]
             enc.dateEncodingStrategy = .iso8601
             let data = try enc.encode(self)
-            try data.write(to: url, options: .atomic)
+            let nextTempURL = directory.appendingPathComponent(".\(url.lastPathComponent).tmp-\(UUID().uuidString)")
+            tempURL = nextTempURL
+            try data.write(to: nextTempURL, options: .atomic)
+            try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: nextTempURL.path)
+            if fileManager.fileExists(atPath: url.path) {
+                _ = try fileManager.replaceItemAt(url, withItemAt: nextTempURL, backupItemName: nil)
+            } else {
+                try fileManager.moveItem(at: nextTempURL, to: url)
+            }
             return true
         } catch {
             return false
@@ -151,10 +187,10 @@ public struct SystemDockPrefsSnapshot: Codable, Equatable, Sendable {
 
     private static func readDouble(_ any: Any?) -> (Double?, Bool) {
         guard let any else { return (nil, false) }
-        if let d = any as? Double { return (d, true) }
+        if let d = any as? Double { return (d.isFinite ? d : nil, true) }
         if let i = any as? Int { return (Double(i), true) }
-        if let n = any as? NSNumber { return (n.doubleValue, true) }
-        if let s = any as? String, let d = Double(s) { return (d, true) }
+        if let n = any as? NSNumber { return (n.doubleValue.isFinite ? n.doubleValue : nil, true) }
+        if let s = any as? String, let d = Double(s) { return (d.isFinite ? d : nil, true) }
         return (nil, true)
     }
 }

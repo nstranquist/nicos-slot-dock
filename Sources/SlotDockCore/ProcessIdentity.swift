@@ -13,8 +13,6 @@ public enum SlotDockProcessIdentity {
         [
             "\(appBundleName)/Contents/MacOS/\(executableName)",
             "\(installedAppName)/Contents/MacOS/\(executableName)",
-            "/\(executableName)",
-            executableName,
         ]
     }
 
@@ -35,10 +33,6 @@ public enum SlotDockProcessIdentity {
                     let end = cmd.index(cmd.startIndex, offsetBy: idx + key.count)
                     if end == cmd.endIndex || cmd[end].isWhitespace { return true }
                 }
-            } else if cmd.hasSuffix("/" + key) {
-                return true
-            } else if cmd == key {
-                return true
             }
         }
         return false

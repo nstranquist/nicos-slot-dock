@@ -19,8 +19,8 @@ struct SlotStoreTests {
         let a = store.add(label: "Safari", target: "/Applications/Safari.app", id: "slot-a")
         let b = store.add(label: "Terminal", target: "/System/Applications/Utilities/Terminal.app", id: "slot-b")
 
-        #expect(a.id == "slot-a")
-        #expect(b.id == "slot-b")
+        #expect(a?.id == "slot-a")
+        #expect(b?.id == "slot-b")
         #expect(store.slots.count == 2)
         #expect(store.slots[0].label == "Safari")
         #expect(store.slots[1].label == "Terminal")
@@ -117,5 +117,87 @@ struct SlotStoreTests {
         let home = URL(fileURLWithPath: "/Users/test", isDirectory: true)
         let url = SlotStore.defaultConfigURL(home: home)
         #expect(url.path == "/Users/test/.config/nicos-slot-dock/slots.json")
+    }
+
+    @Test("empty target is rejected and duplicate ids are made unique")
+    func validatesMutations() {
+        let url = tempURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let store = SlotStore(fileURL: url)
+        _ = store.add(label: "", target: "/Applications/Notes.app", id: "same")
+        let duplicate = store.add(label: "Again", target: "/Applications/Other.app", id: "same")
+        let invalid = store.add(label: "No target", target: "", id: "invalid")
+
+        #expect(store.slots.count == 2)
+        #expect(duplicate?.id != "same")
+        #expect(invalid == nil)
+        #expect(store.lastError == .invalidSlot("A Slot Dock target is required."))
+    }
+
+    @Test("duplicate targets are rejected for paths and URLs")
+    func duplicateTargetsRejected() {
+        let url = tempURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let store = SlotStore(fileURL: url)
+        #expect(store.add(label: "Docs", target: "https://Example.com/docs", id: "docs") != nil)
+        #expect(store.add(label: "Docs again", target: "https://example.com/docs", id: "other") == nil)
+        #expect(store.slots.count == 1)
+
+        #expect(store.add(label: "App", target: "/Applications/Notes.app", id: "app") != nil)
+        #expect(store.add(label: "App again", target: "/Applications/Notes.app/", id: "app-2") == nil)
+        #expect(store.slots.count == 2)
+    }
+
+    @Test("future schema is readable but read-only")
+    func futureSchemaIsReadOnly() throws {
+        let url = tempURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let future = SlotDocument(version: ConfigDocumentVersion.current + 1)
+        let data = try JSONEncoder().encode(future)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try data.write(to: url)
+
+        let store = SlotStore(fileURL: url)
+        #expect(store.isReadOnly)
+        #expect(store.lastError == .futureVersion(ConfigDocumentVersion.current + 1))
+        _ = store.add(label: "Ignored", target: "/Applications/Notes.app", id: "ignored")
+        #expect(store.slots.isEmpty)
+    }
+
+    @Test("corrupt configuration is preserved and not overwritten")
+    func corruptConfigFailsClosed() throws {
+        let url = tempURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let original = Data("not-json".utf8)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try original.write(to: url)
+
+        let store = SlotStore(fileURL: url)
+        #expect(store.isReadOnly)
+        #expect(store.lastError != nil)
+        let preserved = try Data(contentsOf: url)
+        #expect(preserved == original)
+    }
+
+    @Test("loaded slots repair identity and whitespace drift")
+    func normalizesLoadedSlots() throws {
+        let url = tempURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let document = SlotDocument(
+            version: ConfigDocumentVersion.current,
+            slots: [
+                Slot(id: "same", label: "  ", target: "  /Applications/Notes.app  ", sortOrder: 40),
+                Slot(id: "same", label: "Other", target: "/Applications/Other.app", sortOrder: 2),
+            ]
+        )
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try JSONEncoder().encode(document).write(to: url)
+
+        let store = SlotStore(fileURL: url)
+        #expect(store.slots.count == 2)
+        #expect(Set(store.slots.map(\.id)).count == 2)
+        #expect(store.slots[0].label == "Notes")
+        #expect(store.slots[0].target == "/Applications/Notes.app")
+        #expect(store.slots.map(\.sortOrder) == [0, 1])
     }
 }

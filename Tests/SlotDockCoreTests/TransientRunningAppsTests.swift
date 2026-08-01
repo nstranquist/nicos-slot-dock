@@ -60,4 +60,27 @@ struct TransientRunningAppsTests {
         )
         #expect(items.isEmpty)
     }
+
+    @Test("system bundle identity prevents a duplicate transient copy")
+    func composeDoesNotDuplicateSystemBundle() {
+        let system = [SystemDockEntry(
+            label: "Safari",
+            path: "/Applications/Safari.app",
+            bundleIdentifier: "com.apple.Safari"
+        )]
+        let running = [RunningAppInfo(
+            bundleIdentifier: "com.apple.Safari",
+            path: "/Applications/Safari.app",
+            name: "Safari"
+        )]
+        let items = SlotComposer.compose(
+            custom: [],
+            system: system,
+            mode: .merge,
+            runningApps: running,
+            includeRunningExtras: true
+        )
+        #expect(items.count == 1)
+        #expect(items[0].origin == .systemDock)
+    }
 }

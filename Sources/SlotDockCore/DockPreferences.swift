@@ -76,6 +76,8 @@ public struct DockPreferences: Codable, Equatable, Sendable {
     public var hotkeys: DockHotkeys
     /// Show the menu-bar status item (right side of the bar). Off = strip only.
     public var showStatusItem: Bool
+    /// Keep the strip visible in macOS full-screen Spaces.
+    public var showInFullScreen: Bool
     /// Honor system macOS Dock apps: off / merge (default) / mirror.
     public var systemDockIntegration: SystemDockIntegration
     /// In merge mode, draw a divider between custom slots and system Dock apps.
@@ -111,6 +113,7 @@ public struct DockPreferences: Codable, Equatable, Sendable {
         launchFeedback: Bool = true,
         hotkeys: DockHotkeys = .default,
         showStatusItem: Bool = true,
+        showInFullScreen: Bool = true,
         systemDockIntegration: SystemDockIntegration = .merge,
         showSystemDockDivider: Bool = true,
         showRunningDots: Bool = true,
@@ -136,12 +139,13 @@ public struct DockPreferences: Codable, Equatable, Sendable {
         self.launchFeedback = launchFeedback
         self.hotkeys = hotkeys
         self.showStatusItem = showStatusItem
+        self.showInFullScreen = showInFullScreen
         self.systemDockIntegration = systemDockIntegration
         self.showSystemDockDivider = showSystemDockDivider
         self.showRunningDots = showRunningDots
         self.showTransientRunningApps = showTransientRunningApps
         self.safeAreaPadding = safeAreaPadding
-        self.safeAreaExtraGap = max(0, min(40, safeAreaExtraGap))
+        self.safeAreaExtraGap = Self.clampSafeAreaExtraGap(safeAreaExtraGap)
         self.collisionGuideDismissed = collisionGuideDismissed
         self.launchAtLogin = launchAtLogin
     }
@@ -203,27 +207,36 @@ public struct DockPreferences: Codable, Equatable, Sendable {
     public static let expandedChromeExtra: Double = 28
 
     public static func clampDelay(_ value: Double) -> Double {
-        min(maxAutoHideDelay, max(minAutoHideDelay, value))
+        clamp(value, fallback: 0.85, lower: minAutoHideDelay, upper: maxAutoHideDelay)
     }
 
     public static func clampAutoHideLeaveMargin(_ value: Double) -> Double {
-        min(maxAutoHideLeaveMargin, max(minAutoHideLeaveMargin, value))
+        clamp(value, fallback: defaultAutoHideLeaveMargin, lower: minAutoHideLeaveMargin, upper: maxAutoHideLeaveMargin)
     }
 
     public static func clampEdgeTriggerHeight(_ value: Double) -> Double {
-        min(maxEdgeTriggerHeight, max(minEdgeTriggerHeight, value))
+        clamp(value, fallback: defaultEdgeTriggerHeight, lower: minEdgeTriggerHeight, upper: maxEdgeTriggerHeight)
     }
 
     public static func clampEdgeHorizontalOvershoot(_ value: Double) -> Double {
-        min(maxEdgeHorizontalOvershoot, max(minEdgeHorizontalOvershoot, value))
+        clamp(value, fallback: defaultEdgeHorizontalOvershoot, lower: minEdgeHorizontalOvershoot, upper: maxEdgeHorizontalOvershoot)
     }
 
     public static func clampRevealBaseDuration(_ value: Double) -> Double {
-        min(maxRevealBaseDuration, max(minRevealBaseDuration, value))
+        clamp(value, fallback: defaultRevealBaseDuration, lower: minRevealBaseDuration, upper: maxRevealBaseDuration)
     }
 
     public static func clampIconSpacing(_ value: Double) -> Double {
-        min(maxIconSpacing, max(minIconSpacing, value))
+        clamp(value, fallback: defaultIconSpacing, lower: minIconSpacing, upper: maxIconSpacing)
+    }
+
+    public static func clampSafeAreaExtraGap(_ value: Double) -> Double {
+        clamp(value, fallback: 8, lower: 0, upper: 40)
+    }
+
+    private static func clamp(_ value: Double, fallback: Double, lower: Double, upper: Double) -> Double {
+        guard value.isFinite else { return fallback }
+        return min(upper, max(lower, value))
     }
 
     /// Lateral half-width for `isNearBottomEdge` — strip half plus overshoot.
@@ -328,8 +341,14 @@ public struct DockPreferences: Codable, Equatable, Sendable {
         edgeHorizontalOvershoot = Self.clampEdgeHorizontalOvershoot(edgeHorizontalOvershoot)
         revealBaseDuration = Self.clampRevealBaseDuration(revealBaseDuration)
         iconSpacing = Self.clampIconSpacing(iconSpacing)
-        safeAreaExtraGap = max(0, min(40, safeAreaExtraGap))
+        safeAreaExtraGap = Self.clampSafeAreaExtraGap(safeAreaExtraGap)
         hotkeys.sanitize()
+        // Never let a user strand an auto-hidden strip with every recovery
+        // affordance disabled. The status item is the durable fallback when
+        // edge hover and all shortcuts are off.
+        if autoHide && !pinOpen && !edgeHover && !showStatusItem && !hotkeys.hasEnabledBinding {
+            showStatusItem = true
+        }
     }
 
     // Backward-compatible decode for fields added after v1.
@@ -361,6 +380,7 @@ public struct DockPreferences: Codable, Equatable, Sendable {
         launchFeedback = try c.decodeIfPresent(Bool.self, forKey: .launchFeedback) ?? true
         hotkeys = try c.decodeIfPresent(DockHotkeys.self, forKey: .hotkeys) ?? .default
         showStatusItem = try c.decodeIfPresent(Bool.self, forKey: .showStatusItem) ?? true
+        showInFullScreen = try c.decodeIfPresent(Bool.self, forKey: .showInFullScreen) ?? true
         systemDockIntegration = try c.decodeIfPresent(SystemDockIntegration.self, forKey: .systemDockIntegration) ?? .merge
         showSystemDockDivider = try c.decodeIfPresent(Bool.self, forKey: .showSystemDockDivider) ?? true
         showRunningDots = try c.decodeIfPresent(Bool.self, forKey: .showRunningDots) ?? true
@@ -375,7 +395,7 @@ public struct DockPreferences: Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case iconSize, autoHide, autoHideDelay, autoHideLeaveMargin, pinOpen, edgeHover, edgeTriggerHeight
         case edgeHorizontalOvershoot, revealBaseDuration, iconSpacing
-        case showLabels, showIconTooltips, alignment, launchFeedback, hotkeys, showStatusItem
+        case showLabels, showIconTooltips, alignment, launchFeedback, hotkeys, showStatusItem, showInFullScreen
         case systemDockIntegration, showSystemDockDivider
         case showRunningDots, showTransientRunningApps, safeAreaPadding, safeAreaExtraGap, collisionGuideDismissed
         case launchAtLogin

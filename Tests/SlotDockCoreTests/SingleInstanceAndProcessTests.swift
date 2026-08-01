@@ -42,8 +42,10 @@ struct SingleInstanceAndProcessTests {
         #expect(!SlotDockProcessIdentity.matchesProcessCommand(
             "/usr/bin/swift test --package-path apps/desktop/nicos-slot-dock"
         ))
+        #expect(!SlotDockProcessIdentity.matchesProcessCommand("/tmp/SlotDock"))
+        #expect(!SlotDockProcessIdentity.matchesProcessCommand("SlotDock"))
         #expect(SlotDockProcessIdentity.bundleIdentifier == "com.nstranquist.nicos-slot-dock")
-        #expect(SlotDockProcessIdentity.processMatchKeys.contains("SlotDock"))
+        #expect(SlotDockProcessIdentity.processMatchKeys.allSatisfy { $0.contains(".app/Contents/MacOS/SlotDock") })
     }
 }
 
@@ -78,5 +80,11 @@ struct HotkeyRegistrationTests {
         )
         #expect(report.hasProblems)
         #expect(report.userSummary.contains("handler"))
+    }
+
+    @Test("unsupported and duplicate shortcut statuses are explicit")
+    func unsupportedAndDuplicateStatuses() {
+        #expect(HotkeyRegistrationReport.explainStatus(-10001).contains("not supported"))
+        #expect(HotkeyRegistrationReport.explainStatus(-10002).contains("conflicts"))
     }
 }

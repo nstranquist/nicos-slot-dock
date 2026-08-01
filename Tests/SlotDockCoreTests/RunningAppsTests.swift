@@ -21,6 +21,32 @@ struct RunningAppsTests {
         #expect(RunningIndicator.shouldShowDot(for: slot, running: running) == true)
     }
 
+    @Test("running path matching is separator-aware")
+    func runningPathDoesNotMatchPrefixSibling() {
+        let snapshot = RunningAppSnapshot(paths: ["/Applications/Foo.app2"])
+        let identity = AppIdentity(path: "/Applications/Foo.app")
+        #expect(snapshot.isRunning(identity) == false)
+    }
+
+    @Test("bundle matches the paired application path when copies share an id")
+    func sameBundleUsesPathIdentity() {
+        let slot = Slot(
+            id: "sysdock:com.example.Editor:/Applications/Editor.app",
+            label: "Editor",
+            target: "/Applications/Editor.app"
+        )
+        let running = RunningAppSnapshot(
+            bundleIdentifiers: ["com.example.Editor"],
+            paths: ["/Volumes/Other/Editor.app"],
+            apps: [RunningAppInfo(
+                bundleIdentifier: "com.example.Editor",
+                path: "/Volumes/Other/Editor.app",
+                name: "Editor"
+            )]
+        )
+        #expect(RunningIndicator.shouldShowDot(for: slot, running: running) == false)
+    }
+
     @Test("not running does not show dot")
     func notRunning() {
         let slot = Slot(id: "c1", label: "Notes", target: "/System/Applications/Notes.app")

@@ -45,7 +45,32 @@ enum SlotDockHeadless {
                     let slotCount = store.slots.count
                     let displayCount = store.displayItems.count
                     let systemCount = store.systemDockEntries.count
-                    let ok = dockVisible && store.reveal.progress > 0 && displayCount >= 0
+                    let settingsValid = store.settingsOpen && store.settingsTab == .options
+                    let uniqueDisplayIDs = Set(store.displayItems.map(\.id)).count == store.displayItems.count
+                    let validOrigins = store.displayItems.allSatisfy { item in
+                        switch item.origin {
+                        case .custom, .systemDock, .running: return true
+                        }
+                    }
+                    let compositionValid: Bool = {
+                        switch store.preferences.systemDockIntegration {
+                        case .off:
+                            return validOrigins && uniqueDisplayIDs
+                                && store.displayItems.allSatisfy { $0.origin == .custom }
+                        case .mirror:
+                            return validOrigins && uniqueDisplayIDs
+                                && store.displayItems.count == systemCount
+                                && store.displayItems.allSatisfy { $0.origin == .systemDock }
+                        case .merge:
+                            return validOrigins && uniqueDisplayIDs
+                                && displayCount >= (slotCount == 0 ? 0 : 1)
+                        }
+                    }()
+                    let ok = dockVisible
+                        && phase == "expanded"
+                        && store.reveal.progress >= 0.99
+                        && settingsValid
+                        && compositionValid
 
                     let payload: [String: Any] = [
                         "ok": ok,
@@ -58,10 +83,13 @@ enum SlotDockHeadless {
                         "system_dock_mode": store.preferences.systemDockIntegration.rawValue,
                         "settings_open": store.settingsOpen,
                         "settings_tab": store.settingsTab.rawValue,
+                        "settings_valid": settingsValid,
+                        "composition_valid": compositionValid,
                         "icon_size": store.preferences.iconSize.rawValue,
                         "app": "nicos-slot-dock",
                     ]
 
+                    var reportWritten = false
                     if let reportPath = ProcessInfo.processInfo.environment["SLOT_DOCK_SELFTEST_REPORT"],
                        !reportPath.isEmpty,
                        let data = try? JSONSerialization.data(
@@ -74,12 +102,17 @@ enum SlotDockHeadless {
                             at: url.deletingLastPathComponent(),
                             withIntermediateDirectories: true
                         )
-                        try? data.write(to: url)
-                        fputs("slot-dock: wrote report \(reportPath)\n", stderr)
+                        do {
+                            try data.write(to: url, options: .atomic)
+                            reportWritten = true
+                            fputs("slot-dock: wrote report\n", stderr)
+                        } catch {
+                            fputs("slot-dock: report write failed: \(error.localizedDescription)\n", stderr)
+                        }
                     }
 
-                    fputs("slot-dock: self-test ok=\(ok) phase=\(phase) slots=\(slotCount)\n", stderr)
-                    Darwin.exit(ok ? 0 : 1)
+                    fputs("slot-dock: self-test ok=\(ok) phase=\(phase) slots=\(slotCount) report=\(reportWritten)\n", stderr)
+                    Darwin.exit(ok && reportWritten ? 0 : 1)
                 }
             }
         }

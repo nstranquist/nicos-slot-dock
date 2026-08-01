@@ -5,6 +5,8 @@ BUNDLE_NAME := SlotDock
 EXECUTABLE := SlotDock
 BUILD_DIR := .build/release
 APP_DIR := $(BUILD_DIR)/$(BUNDLE_NAME).app
+APP_VERSION ?= 0.2.0
+BUILD_NUMBER ?= 2
 INSTALL_DIR := /Applications
 INSTALLED_APP := $(INSTALL_DIR)/Slot Dock.app
 BUNDLE_ID := com.nstranquist.nicos-slot-dock
@@ -17,31 +19,32 @@ build:
 	@mkdir -p "$(APP_DIR)/Contents/Resources"
 	@cp "$(BUILD_DIR)/$(EXECUTABLE)" "$(APP_DIR)/Contents/MacOS/$(EXECUTABLE)"
 	@cp Resources/Info.plist "$(APP_DIR)/Contents/Info.plist"
+	@/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $(APP_VERSION)" "$(APP_DIR)/Contents/Info.plist"
+	@/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $(BUILD_NUMBER)" "$(APP_DIR)/Contents/Info.plist"
 	@plutil -lint "$(APP_DIR)/Contents/Info.plist" >/dev/null
-	@codesign $(CODE_SIGN_FLAGS) --deep "$(APP_DIR)" 2>/dev/null && echo "  Signed (ad-hoc)" || echo "  (codesign skipped)"
+	@codesign $(CODE_SIGN_FLAGS) --deep "$(APP_DIR)"
+	@echo "  Signed: $(CODE_SIGN_IDENTITY)"
 	@echo "  Built: $(APP_DIR)"
 	@echo "  Executable: $(APP_DIR)/Contents/MacOS/$(EXECUTABLE)"
 	@ls -lh "$(APP_DIR)/Contents/MacOS/$(EXECUTABLE)"
 
 run: build
+	@open "$(APP_DIR)"
+
+restart: build
 	@pkill -x "$(EXECUTABLE)" 2>/dev/null || true
 	@sleep 0.3
 	@open "$(APP_DIR)"
 
 install: build
-	@pkill -x "$(EXECUTABLE)" 2>/dev/null || true
-	@sleep 0.5
-	@rm -rf "$(INSTALLED_APP)"
-	@mkdir -p "$(INSTALL_DIR)"
-	@cp -R "$(APP_DIR)" "$(INSTALLED_APP)"
+	@set -euo pipefail; mkdir -p "$(INSTALL_DIR)"; stage="$$(mktemp -d "$(INSTALL_DIR)/.slot-dock-install.XXXXXX")"; backup="$(INSTALLED_APP).previous.$$(date +%Y%m%d%H%M%S)"; trap 'rm -rf "$$stage"; if [[ -n "$${moved:-}" && ! -e "$(INSTALLED_APP)" && -e "$$moved" ]]; then mv "$$moved" "$(INSTALLED_APP)"; fi' EXIT; ditto "$(APP_DIR)" "$$stage/Slot Dock.app"; if [[ -e "$(INSTALLED_APP)" ]]; then moved="$$backup"; mv "$(INSTALLED_APP)" "$$moved"; fi; mv "$$stage/Slot Dock.app" "$(INSTALLED_APP)"; trap - EXIT; rmdir "$$stage" 2>/dev/null || true
 	@/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$(INSTALLED_APP)" 2>/dev/null || true
 	@echo "  Installed: $(INSTALLED_APP)"
 	@open "$(INSTALLED_APP)"
 
 uninstall:
 	@pkill -x "$(EXECUTABLE)" 2>/dev/null || true
-	@rm -rf "$(INSTALLED_APP)"
-	@echo "  Uninstalled $(APP_NAME)"
+	@set -euo pipefail; if [[ -e "$(INSTALLED_APP)" ]]; then target="$(INSTALLED_APP).uninstalled.$$(date +%Y%m%d%H%M%S)"; mv "$(INSTALLED_APP)" "$$target"; echo "  Moved to $$target"; else echo "  Not installed"; fi
 
 test:
 	swift test
@@ -49,15 +52,18 @@ test:
 headless-smoke: build
 	@./scripts/headless_smoke.sh
 
-verify: test build
-	@codesign --verify --deep --strict "$(APP_DIR)" 2>/dev/null || true
+verify: test build headless-smoke
+	@codesign --verify --deep --strict "$(APP_DIR)"
 	@test -x "$(APP_DIR)/Contents/MacOS/$(EXECUTABLE)"
 	@plutil -lint "$(APP_DIR)/Contents/Info.plist" >/dev/null
 	@/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$(APP_DIR)/Contents/Info.plist" | grep -q 'nicos-slot-dock'
 	@echo "  verify ok"
 
 package: build
-	@echo "$(APP_DIR)"
+	@mkdir -p .build/artifacts
+	@ditto -c -k --keepParent "$(APP_DIR)" ".build/artifacts/SlotDock-$(APP_VERSION).zip"
+	@shasum -a 256 ".build/artifacts/SlotDock-$(APP_VERSION).zip" > ".build/artifacts/SlotDock-$(APP_VERSION).zip.sha256"
+	@echo ".build/artifacts/SlotDock-$(APP_VERSION).zip"
 
 clean:
 	swift package clean

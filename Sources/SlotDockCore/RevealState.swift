@@ -65,7 +65,7 @@ public struct RevealState: Equatable, Sendable {
     @discardableResult
     public mutating func advance(by delta: Double) -> Bool {
         let previous = phase
-        let d = abs(delta)
+        let d = delta.isFinite ? abs(delta) : 0
         switch phase {
         case .expanding:
             progress = Self.clamp(progress + d)
@@ -163,7 +163,8 @@ public struct RevealState: Equatable, Sendable {
     }
 
     private static func clamp(_ value: Double) -> Double {
-        min(1, max(0, value))
+        guard value.isFinite else { return 0 }
+        return min(1, max(0, value))
     }
 }
 

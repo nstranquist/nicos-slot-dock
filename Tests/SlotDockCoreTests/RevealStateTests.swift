@@ -50,6 +50,14 @@ struct RevealStateTests {
         #expect(state.progress == 0)
     }
 
+    @Test("non-finite progress and deltas fail closed")
+    func nonFiniteInputs() {
+        var state = RevealState(phase: .expanding, progress: .nan)
+        #expect(state.progress == 0)
+        _ = state.advance(by: .infinity)
+        #expect(state.progress == 0)
+    }
+
     @Test("toggle flips direction")
     func toggleFlips() {
         var state = RevealState.collapsed

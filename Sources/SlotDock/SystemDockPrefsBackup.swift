@@ -9,7 +9,7 @@ enum SystemDockPrefsBackup {
     static var backupURL: URL { SystemDockPrefsSnapshot.defaultBackupURL }
 
     static var hasBackup: Bool {
-        FileManager.default.fileExists(atPath: backupURL.path)
+        load() != nil
     }
 
     static func load() -> SystemDockPrefsSnapshot? {
@@ -32,7 +32,7 @@ enum SystemDockPrefsBackup {
         let snap = capture(note: note)
         guard snap.save(to: backupURL) else { return nil }
         SlotDockTelemetry.preferences.info(
-            "Saved system Dock prefs backup note=\(note ?? "", privacy: .public)"
+            "Saved system Dock prefs backup note=\(note ?? "", privacy: .private)"
         )
         return snap
     }

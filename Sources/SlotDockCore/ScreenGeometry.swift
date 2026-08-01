@@ -76,18 +76,27 @@ public enum ScreenGeometry {
         horizontalMargin: CGFloat,
         bottomInset: CGFloat
     ) -> CGRect {
-        let w = min(max(width, 200), max(200, visible.size.width - horizontalMargin * 2))
+        // Never let the minimum desktop strip width overflow a narrow display
+        // (Sidecar, portrait, or a small virtual display). On normal displays
+        // this preserves the historical 200 pt minimum.
+        let margin = horizontalMargin.isFinite ? max(0, horizontalMargin) : 0
+        let availableWidth = max(1, visible.size.width - margin * 2)
+        let requestedWidth = width.isFinite ? width : 200
+        let w = min(max(requestedWidth, 200), availableWidth)
+        let effectiveMargin = min(margin, max(0, (visible.size.width - w) / 2))
         let x: CGFloat
         switch alignment {
         case .leading:
-            x = visible.minX + horizontalMargin
+            x = visible.minX + effectiveMargin
         case .center:
             x = visible.midX - w / 2
         case .trailing:
-            x = visible.maxX - w - horizontalMargin
+            x = visible.maxX - w - effectiveMargin
         }
-        let y = visible.minY + bottomInset
-        return CGRect(origin: CGPoint(x: x, y: y), size: CGSize(width: w, height: height))
+        let inset = bottomInset.isFinite ? bottomInset : 0
+        let safeHeight = height.isFinite ? max(0, height) : 0
+        let y = visible.minY + inset
+        return CGRect(origin: CGPoint(x: x, y: y), size: CGSize(width: w, height: safeHeight))
     }
 
     /// Whether pointer is near the bottom edge of the given visible frame (reveal hit test).

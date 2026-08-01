@@ -16,8 +16,9 @@ public struct AppIdentity: Equatable, Hashable, Sendable {
         var bundle: String?
         if slot.id.hasPrefix("sysdock:") {
             let rest = String(slot.id.dropFirst("sysdock:".count))
-            if rest.contains(".") && !rest.hasPrefix("/") {
-                bundle = rest
+            let candidate = rest.split(separator: ":", maxSplits: 1).first.map(String.init) ?? rest
+            if candidate.contains(".") && !candidate.hasPrefix("/") {
+                bundle = candidate
             }
         }
         return AppIdentity(
@@ -30,7 +31,10 @@ public struct AppIdentity: Equatable, Hashable, Sendable {
 /// One running GUI app (for optional transient strip icons).
 public struct RunningAppInfo: Equatable, Sendable, Identifiable {
     public var id: String {
-        if let b = bundleIdentifier, !b.isEmpty { return "running:\(b)" }
+        if let b = bundleIdentifier, !b.isEmpty {
+            let normalized = SystemDockEntry.normalizePath(path)
+            return normalized.isEmpty ? "running:\(b)" : "running:\(b):\(normalized)"
+        }
         return "running:\(SystemDockEntry.normalizePath(path))"
     }
 
@@ -73,7 +77,27 @@ public struct RunningAppSnapshot: Equatable, Sendable {
     }
 
     public func isRunning(_ identity: AppIdentity) -> Bool {
-        if let b = identity.bundleIdentifier?.lowercased(), !b.isEmpty, bundleIdentifiers.contains(b) {
+        if let b = identity.bundleIdentifier?.lowercased(), !b.isEmpty,
+           bundleIdentifiers.contains(b)
+        {
+            // A bundle id is not globally unique on disk: multiple app copies
+            // can be open at once. Prefer the paired bundle/path record when the
+            // slot carries a concrete path; fall back to bundle-only matching
+            // only when the slot has no path identity.
+            if let p = identity.path?.lowercased(), !p.isEmpty {
+                let sameBundle = apps.filter { app in
+                    app.bundleIdentifier?.lowercased() == b
+                }
+                guard !sameBundle.isEmpty else {
+                    // Tests and callers may provide only the legacy bundle set;
+                    // do not turn that compact representation into a false
+                    // negative.
+                    return true
+                }
+                return sameBundle.contains { app in
+                    return SystemDockEntry.normalizePath(app.path).lowercased() == p
+                }
+            }
             return true
         }
         if let p = identity.path?.lowercased(), !p.isEmpty, paths.contains(p) {
@@ -82,7 +106,7 @@ public struct RunningAppSnapshot: Equatable, Sendable {
         // Path may be .app bundle; also check without trailing variations
         if let p = identity.path {
             let lower = SystemDockEntry.normalizePath(p).lowercased()
-            if paths.contains(where: { $0 == lower || $0.hasPrefix(lower + "/") || lower.hasPrefix($0) }) {
+            if paths.contains(where: { $0 == lower || $0.hasPrefix(lower + "/") || lower.hasPrefix($0 + "/") }) {
                 return true
             }
         }

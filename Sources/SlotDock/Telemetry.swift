@@ -76,11 +76,11 @@ enum SlotDockTelemetry {
     }
 
     static func event(_ logger: Logger, _ message: String) {
-        logger.info("\(message, privacy: .public)")
+        logger.info("\(message, privacy: .private)")
     }
 
     static func fault(_ message: String) {
-        error.error("\(message, privacy: .public)")
+        error.error("\(message, privacy: .private)")
     }
 
     /// Structured state transition (searchable prefix).
@@ -88,7 +88,7 @@ enum SlotDockTelemetry {
         if details.isEmpty {
             logger.info("→ \(name, privacy: .public)")
         } else {
-            logger.info("→ \(name, privacy: .public) \(details, privacy: .public)")
+            logger.info("→ \(name, privacy: .public) \(details, privacy: .private)")
         }
     }
 }

@@ -181,7 +181,12 @@ public enum SlotContextMenuBuilder {
 
         items.append(.separator(id: "sep-reveal"))
         items.append(
-            SlotContextMenuItem(id: "finder", title: "Show in Finder", action: .showInFinder)
+            SlotContextMenuItem(
+                id: "finder",
+                title: "Show in Finder",
+                action: .showInFinder,
+                enabled: input.kind != .url
+            )
         )
         items.append(
             SlotContextMenuItem(id: "copy-path", title: "Copy Path", action: .copyPath)
@@ -355,7 +360,7 @@ public enum SlotContextMenuBuilder {
 
     /// Whether an app path supports “Open New Instance”.
     public static func canOpenNewInstance(kind: LaunchRequest.Kind, path: String) -> Bool {
-        kind == .application && path.hasSuffix(".app") && !path.isEmpty
+        kind == .application && path.lowercased().hasSuffix(".app") && !path.isEmpty
     }
 }
 
@@ -379,7 +384,7 @@ public enum AppOpenAtLoginPolicy {
         guard !normalized.isEmpty else { return false }
         // Reject bare URLs mistaken as paths.
         if normalized.contains("://") { return false }
-        if !normalized.hasSuffix(".app") { return false }
+        if !normalized.lowercased().hasSuffix(".app") { return false }
         return true
     }
 
@@ -391,7 +396,7 @@ public enum AppOpenAtLoginPolicy {
     /// Display name used by System Events login items (last path component without `.app`).
     public static func loginItemDisplayName(path: String) -> String {
         let base = URL(fileURLWithPath: path).lastPathComponent
-        if base.hasSuffix(".app") {
+        if base.lowercased().hasSuffix(".app") {
             return String(base.dropLast(4))
         }
         return base
@@ -401,6 +406,13 @@ public enum AppOpenAtLoginPolicy {
     public static func isEnabled(targetPath: String, loginItemPaths: [String]) -> Bool {
         let key = SystemDockEntry.normalizePath(targetPath).lowercased()
         return loginItemPaths.contains { SystemDockEntry.normalizePath($0).lowercased() == key }
+    }
+
+    /// AppleScript lists are one-based. Returning an empty range for an empty
+    /// result avoids constructing the invalid closed range `1...0`.
+    public static func appleScriptItemIndices(count: Int) -> Range<Int> {
+        guard count > 0 else { return 0..<0 }
+        return 1..<(count + 1)
     }
 }
 

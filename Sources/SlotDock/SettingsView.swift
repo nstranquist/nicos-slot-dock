@@ -23,6 +23,7 @@ struct SettingsView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+            errorBanner
             Divider()
             Picker("", selection: $store.settingsTab) {
                 ForEach(SlotDockStore.SettingsTab.allCases) { tab in
@@ -53,7 +54,9 @@ struct SettingsView: View {
                 : [.image, .icns],
             allowsMultipleSelection: false
         ) { result in
-            if case .success(let urls) = result, let url = urls.first {
+            switch result {
+            case .success(let urls) where urls.first != nil:
+                guard let url = urls.first else { return }
                 let path = url.path
                 switch importFor {
                 case .target:
@@ -64,6 +67,10 @@ struct SettingsView: View {
                 case .icon:
                     draftIcon = path
                 }
+            case .success:
+                lastImportNote = "No item selected."
+            case .failure(let error):
+                lastImportNote = "Could not import item: \(error.localizedDescription)"
             }
         }
         .onAppear {
@@ -80,6 +87,39 @@ struct SettingsView: View {
         }
         .onChange(of: store.pendingEditSlotID) { _, _ in
             consumePendingEditIfNeeded()
+        }
+    }
+
+    @ViewBuilder
+    private var errorBanner: some View {
+        let messages = [
+            store.configurationError,
+            store.safeAreaError,
+            store.lastLaunchError,
+        ].compactMap { $0 }
+        if let message = messages.first {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                Text(message)
+                    .font(.system(size: 11))
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Button {
+                    store.lastLaunchError = nil
+                    store.configurationError = nil
+                    store.safeAreaError = nil
+                } label: {
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Dismiss error")
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.orange.opacity(0.12))
+            .accessibilityIdentifier("settings-error-banner")
         }
     }
 
@@ -132,6 +172,10 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .onDrop(of: [.fileURL, .url, .plainText], isTargeted: $isTargetedDrop) { providers in
+            handleProviderDrop(providers)
+        }
+        .disabled(store.configurationReadOnly)
     }
 
     /// Quick path to hide the stock Dock so two strips don’t fight.
@@ -193,6 +237,7 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.borderless)
                 .help("Re-read com.apple.dock")
+                .accessibilityLabel("Refresh system Dock")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -280,6 +325,7 @@ struct SettingsView: View {
             .buttonStyle(.borderless)
             .disabled(already)
             .help(already ? "Already imported" : "Add as custom slot")
+            .accessibilityLabel(already ? "Already imported" : "Add \(entry.label) as custom slot")
         }
         .padding(.vertical, 2)
         .opacity(already ? 0.55 : 1)
@@ -341,6 +387,7 @@ struct SettingsView: View {
                         }
                         .buttonStyle(.borderless)
                         .help("Edit")
+                        .accessibilityLabel("Edit \(slot.label)")
 
                         Button(role: .destructive) {
                             _ = store.removeSlot(id: slot.id)
@@ -351,6 +398,7 @@ struct SettingsView: View {
                         }
                         .buttonStyle(.borderless)
                         .help("Remove")
+                        .accessibilityLabel("Remove \(slot.label)")
                     }
                     .padding(.vertical, 2)
                     .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
@@ -391,6 +439,8 @@ struct SettingsView: View {
         for raw in items {
             if store.importFromDockDragPayload(raw) != nil {
                 added += 1
+            } else if case .accept = store.addSlotFromDrop(raw) {
+                added += 1
             }
         }
         if added > 0 {
@@ -399,6 +449,95 @@ struct SettingsView: View {
         }
         lastImportNote = "Drop ignored (already present or invalid)."
         return false
+    }
+
+    private func handleProviderDrop(_ providers: [NSItemProvider]) -> Bool {
+        var claimed = false
+        let dockStore = store
+
+        for provider in providers {
+            if provider.hasItemConformingToTypeIdentifier("public.file-url") {
+                claimed = true
+                provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, error in
+                    let raw: String? = {
+                        if let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) {
+                            return url.path
+                        }
+                        if let url = item as? URL { return url.path }
+                        if let string = item as? String { return string }
+                        return nil
+                    }()
+                    let errorMessage = error?.localizedDescription
+                    Task { @MainActor [dockStore] in
+                        guard let raw else {
+                            lastImportNote = errorMessage ?? "Could not read the dropped item."
+                            return
+                        }
+                        if dockStore.importFromDockDragPayload(raw) != nil {
+                            lastImportNote = "Imported item from drag."
+                            return
+                        }
+                        switch dockStore.addSlotFromDrop(raw) {
+                        case .accept:
+                            lastImportNote = "Imported item from drag."
+                        case .reject(let reason):
+                            lastImportNote = reason
+                        }
+                    }
+                }
+            } else if provider.hasItemConformingToTypeIdentifier("public.url") {
+                claimed = true
+                provider.loadItem(forTypeIdentifier: "public.url", options: nil) { item, error in
+                    let raw: String? = {
+                        if let url = item as? URL { return url.absoluteString }
+                        if let data = item as? Data, let string = String(data: data, encoding: .utf8) {
+                            return string
+                        }
+                        if let string = item as? String { return string }
+                        return nil
+                    }()
+                    let errorMessage = error?.localizedDescription
+                    Task { @MainActor [dockStore] in
+                        guard let raw else {
+                            lastImportNote = errorMessage ?? "Could not read the dropped item."
+                            return
+                        }
+                        if dockStore.importFromDockDragPayload(raw) != nil {
+                            lastImportNote = "Imported item from drag."
+                            return
+                        }
+                        switch dockStore.addSlotFromDrop(raw) {
+                        case .accept:
+                            lastImportNote = "Imported item from drag."
+                        case .reject(let reason):
+                            lastImportNote = reason
+                        }
+                    }
+                }
+            } else if provider.canLoadObject(ofClass: String.self) {
+                claimed = true
+                _ = provider.loadObject(ofClass: String.self) { string, error in
+                    let errorMessage = error?.localizedDescription
+                    Task { @MainActor [dockStore] in
+                        guard let string else {
+                            lastImportNote = errorMessage ?? "Could not read the dropped item."
+                            return
+                        }
+                        if dockStore.importFromDockDragPayload(string) != nil {
+                            lastImportNote = "Imported item from drag."
+                            return
+                        }
+                        switch dockStore.addSlotFromDrop(string) {
+                        case .accept:
+                            lastImportNote = "Imported item from drag."
+                        case .reject(let reason):
+                            lastImportNote = reason
+                        }
+                    }
+                }
+            }
+        }
+        return claimed
     }
 
     private func runHideSystemDock() {
@@ -416,12 +555,28 @@ struct SettingsView: View {
         alert.addButton(withTitle: "Run")
         alert.addButton(withTitle: "Cancel")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
-        var error: NSDictionary?
-        if let script = NSAppleScript(source: action.payload) {
-            _ = script.executeAndReturnError(&error)
-            lastImportNote = error == nil
-                ? "System Dock auto-hide enabled."
-                : "Could not change Dock preference (check Automation for System Events)."
+        guard SystemDockPrefsBackup.ensureBackupBeforeMutation(note: "before quick system Dock auto-hide") != nil else {
+            lastImportNote = "Could not save a Dock snapshot; nothing was changed."
+            return
+        }
+        lastImportNote = "Updating system Dock…"
+        let source = action.payload
+        DispatchQueue.global(qos: .userInitiated).async {
+            var error: NSDictionary?
+            if let script = NSAppleScript(source: source) {
+                let result = script.executeAndReturnError(&error)
+                if error == nil, result.stringValue?.hasPrefix("ERROR:") == true {
+                    error = [NSAppleScript.errorMessage: result.stringValue ?? "AppleScript returned an error."]
+                }
+            } else {
+                error = [NSAppleScript.errorMessage: "Could not create AppleScript."]
+            }
+            let succeeded = error == nil
+            DispatchQueue.main.async {
+                lastImportNote = succeeded
+                    ? "System Dock auto-hide enabled."
+                    : "Could not change Dock preference (check Automation for System Events)."
+            }
         }
     }
 
@@ -443,6 +598,7 @@ struct SettingsView: View {
                     Image(systemName: "folder")
                 }
                 .help("Browse for app or file")
+                .accessibilityLabel("Browse for app or file")
             }
 
             HStack(spacing: 8) {
@@ -455,6 +611,7 @@ struct SettingsView: View {
                     Image(systemName: "photo")
                 }
                 .help("Browse for custom icon")
+                .accessibilityLabel("Browse for custom icon")
             }
 
             HStack {
@@ -496,9 +653,13 @@ struct SettingsView: View {
         guard !label.isEmpty, !target.isEmpty else { return }
 
         if let id = editingID {
-            _ = store.updateSlot(id: id, label: label, target: target, iconPath: .some(iconValue))
+            guard store.updateSlot(id: id, label: label, target: target, iconPath: .some(iconValue)) != nil else {
+                return
+            }
         } else {
-            _ = store.addSlot(label: label, target: target, iconPath: iconValue)
+            guard store.addSlot(label: label, target: target, iconPath: iconValue) != nil else {
+                return
+            }
         }
         clearEditor()
     }
@@ -537,6 +698,7 @@ private struct OptionsSliderRow: View {
 /// Full options / controls pane.
 struct OptionsView: View {
     @ObservedObject var store: SlotDockStore
+    @State private var confirmReset = false
 
     var body: some View {
         Form {
@@ -806,7 +968,13 @@ struct OptionsView: View {
                     get: { store.preferences.showStatusItem },
                     set: { store.setShowStatusItem($0) }
                 ))
-                .help("Icon on the right side of the menu bar. Off = bottom strip only.")
+                .help("Icon on the right side of the menu bar. Off = bottom strip only. Slot Dock keeps one recovery affordance available when auto-hide, edge hover, and shortcuts are otherwise disabled.")
+
+                Toggle("Show in full-screen Spaces", isOn: Binding(
+                    get: { store.preferences.showInFullScreen },
+                    set: { store.setShowInFullScreen($0) }
+                ))
+                .help("Allow the floating strip to appear over full-screen apps. Turn this off to keep full-screen Spaces unobstructed.")
             }
 
             Section {
@@ -894,8 +1062,9 @@ struct OptionsView: View {
                     NSWorkspace.shared.activateFileViewerSelecting([store.core.fileURL])
                 }
                 Button("Reset options to defaults") {
-                    store.resetPreferences()
+                    confirmReset = true
                 }
+                .disabled(store.configurationReadOnly)
             }
 
             // Last on Options: System Dock resolution / collision guide (after all product controls).
@@ -907,6 +1076,18 @@ struct OptionsView: View {
         }
         .formStyle(.grouped)
         .padding(.bottom, 8)
+        .confirmationDialog(
+            "Reset Slot Dock options?",
+            isPresented: $confirmReset,
+            titleVisibility: .visible
+        ) {
+            Button("Reset Options", role: .destructive) {
+                store.resetPreferences()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This restores behavior, appearance, hotkeys, and integration options to their defaults. Custom slots are kept.")
+        }
     }
 
     private func hotkeyBinding(_ keyPath: WritableKeyPath<DockHotkeys, KeyBinding>) -> Binding<KeyBinding> {
@@ -922,6 +1103,7 @@ struct OptionsView: View {
 @MainActor
 final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private weak var store: SlotDockStore?
+    private var hosting: NSHostingController<SettingsView>?
 
     convenience init(store: SlotDockStore) {
         let view = SettingsView(store: store)
@@ -940,19 +1122,22 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         self.init(window: window)
         self.store = store
+        self.hosting = hosting
         window.delegate = self
     }
 
     func show(tab: SlotDockStore.SettingsTab? = nil) {
+        guard let window else { return }
         if let tab {
             store?.settingsTab = tab
         }
-        // Refresh root so tab binding is current
-        if let store {
-            window?.contentViewController = NSHostingController(rootView: SettingsView(store: store))
+        // Keep one hosting controller so draft fields and pending edits survive
+        // repeated openings; the observed store supplies current state.
+        if let hosting {
+            window.contentViewController = hosting
         }
-        SlotDockHeadless.surface(window!)
-        window?.makeKeyAndOrderFront(nil)
+        SlotDockHeadless.surface(window)
+        window.makeKeyAndOrderFront(nil)
         if !SlotDockHeadless.isHeadless {
             NSApp.activate(ignoringOtherApps: true)
         }

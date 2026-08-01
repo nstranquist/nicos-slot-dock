@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 import SlotDockCore
 import SwiftUI
 
@@ -34,6 +35,7 @@ struct KeyBindingRow: View {
             ))
             .labelsHidden()
             .help("Enable this shortcut")
+            .accessibilityLabel("Enable \(title)")
 
             Button {
                 if listening {
@@ -49,6 +51,7 @@ struct KeyBindingRow: View {
             }
             .buttonStyle(.bordered)
             .help("Click then press a new shortcut (Esc cancels)")
+            .accessibilityLabel("Set \(title) shortcut")
 
             Button("Clear") {
                 binding = .unbound
@@ -57,6 +60,7 @@ struct KeyBindingRow: View {
             }
             .buttonStyle(.borderless)
             .foregroundStyle(.secondary)
+            .accessibilityLabel("Clear \(title) shortcut")
         }
         .onDisappear { stopListening() }
     }
@@ -70,9 +74,14 @@ struct KeyBindingRow: View {
                 Task { @MainActor in stopListening() }
                 return nil
             }
-            // Ignore pure modifier presses
-            let chars = event.charactersIgnoringModifiers ?? ""
-            guard let first = chars.first, !event.modifierFlags.contains(.function) else {
+            let capturedKey: String
+            if let special = Self.specialKey(for: event.keyCode) {
+                capturedKey = special
+            } else if let first = event.charactersIgnoringModifiers?.first,
+                      !event.modifierFlags.contains(.function)
+            {
+                capturedKey = String(first)
+            } else {
                 return nil
             }
             // Require at least one modifier for safety (except we allow if user holds none for rare cases — require Command or Control)
@@ -86,7 +95,7 @@ struct KeyBindingRow: View {
                 return nil
             }
             let next = KeyBinding.fromCapture(
-                characters: String(first),
+                characters: capturedKey,
                 command: cmd,
                 option: opt,
                 shift: shift,
@@ -98,6 +107,38 @@ struct KeyBindingRow: View {
                 onChange()
             }
             return nil
+        }
+    }
+
+    private static func specialKey(for keyCode: UInt16) -> String? {
+        switch Int(keyCode) {
+        case kVK_F1: return "<f1>"
+        case kVK_F2: return "<f2>"
+        case kVK_F3: return "<f3>"
+        case kVK_F4: return "<f4>"
+        case kVK_F5: return "<f5>"
+        case kVK_F6: return "<f6>"
+        case kVK_F7: return "<f7>"
+        case kVK_F8: return "<f8>"
+        case kVK_F9: return "<f9>"
+        case kVK_F10: return "<f10>"
+        case kVK_F11: return "<f11>"
+        case kVK_F12: return "<f12>"
+        case kVK_UpArrow: return "<up>"
+        case kVK_DownArrow: return "<down>"
+        case kVK_LeftArrow: return "<left>"
+        case kVK_RightArrow: return "<right>"
+        case kVK_Home: return "<home>"
+        case kVK_End: return "<end>"
+        case kVK_PageUp: return "<pageup>"
+        case kVK_PageDown: return "<pagedown>"
+        case kVK_Return: return "<return>"
+        case kVK_Tab: return "<tab>"
+        case kVK_Space: return "<space>"
+        case kVK_Delete: return "<delete>"
+        case kVK_ForwardDelete: return "<forwarddelete>"
+        case kVK_Escape: return "<escape>"
+        default: return nil
         }
     }
 

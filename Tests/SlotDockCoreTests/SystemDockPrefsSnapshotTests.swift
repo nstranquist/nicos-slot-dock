@@ -38,6 +38,59 @@ struct SystemDockPrefsSnapshotTests {
         #expect(script.contains("killall Dock"))
     }
 
+    @Test("restoreScript keeps multiline notes as comments and rejects nonfinite numbers")
+    func restoreScriptIsFailClosed() {
+        let snap = SystemDockPrefsSnapshot(
+            autohideDelay: .nan,
+            autohideDelayPresent: true,
+            note: "operator note\n/usr/bin/touch /tmp/should-not-run"
+        )
+        let script = snap.restoreScript()
+        #expect(script.hasPrefix("set -euo pipefail\n"))
+        #expect(script.contains("# note: operator note"))
+        #expect(script.contains("# note: /usr/bin/touch /tmp/should-not-run"))
+        #expect(!script.contains("\n/usr/bin/touch /tmp/should-not-run"))
+        #expect(script.contains("defaults delete com.apple.dock autohide-delay"))
+        #expect(!script.contains("-float nan"))
+    }
+
+    @Test("capture preserves presence while rejecting nonfinite values")
+    func captureRejectsNonfinite() {
+        let snapshot = SystemDockPrefsSnapshot.capture { key in
+            key == "autohide-delay" ? Double.infinity : nil
+        }
+        #expect(snapshot.autohideDelay == nil)
+        #expect(snapshot.autohideDelayPresent == true)
+    }
+
+    @Test("managed value comparison ignores backup metadata")
+    func managedValueComparison() {
+        let base = SystemDockPrefsSnapshot(
+            capturedAt: Date(timeIntervalSince1970: 1),
+            autohide: true,
+            autohidePresent: true,
+            autohideDelay: 5,
+            autohideDelayPresent: true,
+            note: "old"
+        )
+        let sameValues = SystemDockPrefsSnapshot(
+            capturedAt: Date(timeIntervalSince1970: 2),
+            autohide: true,
+            autohidePresent: true,
+            autohideDelay: 5,
+            autohideDelayPresent: true,
+            note: "new"
+        )
+        let changed = SystemDockPrefsSnapshot(
+            autohide: false,
+            autohidePresent: true,
+            autohideDelay: 5,
+            autohideDelayPresent: true
+        )
+        #expect(base.managedValuesEqual(to: sameValues))
+        #expect(!base.managedValuesEqual(to: changed))
+    }
+
     @Test("round-trip JSON save/load")
     func jsonRoundTrip() throws {
         let dir = FileManager.default.temporaryDirectory

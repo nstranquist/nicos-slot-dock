@@ -9,6 +9,8 @@ struct LaunchRequestTests {
         let slot = Slot(id: "1", label: "Safari", target: "/Applications/Safari.app")
         let request = LaunchResolver.resolve(slot: slot) { path in
             path == "/Applications/Safari.app"
+        } fileIsDirectory: { _ in
+            true
         }
         #expect(request.kind == .application)
         #expect(request.resolvedTarget == "/Applications/Safari.app")
@@ -82,9 +84,52 @@ struct LaunchRequestTests {
     @Test("file URL scheme resolves to path")
     func fileURLScheme() {
         let slot = Slot(id: "fu", label: "FU", target: "file:///Applications/Safari.app")
-        let request = LaunchResolver.resolve(slot: slot) { $0 == "/Applications/Safari.app" }
+        let request = LaunchResolver.resolve(
+            slot: slot,
+            fileExists: { $0 == "/Applications/Safari.app" },
+            fileIsDirectory: { _ in true }
+        )
         #expect(request.kind == .application)
         #expect(request.resolvedTarget == "/Applications/Safari.app")
+        #expect(request.isValid == true)
+    }
+
+    @Test("file URL application suffix is case insensitive and strips trailing slash")
+    func uppercaseFileURLApplication() {
+        let request = LaunchResolver.resolve(
+            slot: Slot(id: "upper", label: "Example", target: "file:///Applications/Example.APP/"),
+            fileExists: { $0 == "/Applications/Example.APP" },
+            fileIsDirectory: { _ in true }
+        )
+        #expect(request.kind == .application)
+        #expect(request.resolvedTarget == "/Applications/Example.APP")
+        #expect(request.isValid == true)
+    }
+
+    @Test("relative file paths are rejected")
+    func relativePathRejected() {
+        let request = LaunchResolver.resolve(
+            slot: Slot(id: "relative", label: "Relative", target: "Notes.app")
+        ) { _ in true }
+        #expect(request.kind == .application)
+        #expect(request.isValid == false)
+        #expect(request.resolvedTarget.hasPrefix("/"))
+    }
+
+    @Test("malformed HTTP URL is invalid")
+    func malformedHTTP() {
+        let request = LaunchResolver.resolve(slot: Slot(id: "bad", label: "Bad", target: "https://"))
+        #expect(request.isValid == false)
+    }
+
+    @Test("regular file with app suffix is not classified as application")
+    func regularAppFile() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("slot-dock-regular-\(UUID().uuidString).app")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Data("not an app".utf8).write(to: url)
+        let request = LaunchResolver.resolve(slot: Slot(id: "regular", label: "Regular", target: url.path))
+        #expect(request.kind == .file)
         #expect(request.isValid == true)
     }
 }

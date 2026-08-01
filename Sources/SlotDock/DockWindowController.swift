@@ -23,6 +23,8 @@ final class DockWindowController: NSObject {
     private var globalMouseMonitor: Any?
     private var localMouseMonitor: Any?
     private var settingsObserver: NSObjectProtocol?
+    private var screenParametersObserver: NSObjectProtocol?
+    private var windowBehaviorObserver: NSObjectProtocol?
     private var animationGeneration: UInt = 0
     /// Coalesce same-runloop double starts (begin* + onChange both fire sync).
     private var revealSyncCoalescePending = false
@@ -31,6 +33,10 @@ final class DockWindowController: NSObject {
     private var pointerOverStrip = false
     /// Last processed mouse location (coalesce spammy global mouseMoved samples).
     private var lastMouseSample: CGPoint?
+    /// Display currently hosting the strip. Ordinary relayouts must not jump to
+    /// whichever display happens to contain the mouse; edge crossing explicitly
+    /// changes this anchor.
+    private weak var activeScreen: NSScreen?
 
     private let horizontalMargin: CGFloat = 24
     /// Full expand/collapse travel duration from prefs; short remaining distance scales down.
@@ -80,6 +86,29 @@ final class DockWindowController: NSObject {
                 self?.presentSettingsWindow(tab: tab)
             }
         }
+        screenParametersObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                if let active = self.activeScreen,
+                   !NSScreen.screens.contains(where: { $0 === active })
+                {
+                    self.activeScreen = self.screenUnderPointer() ?? NSScreen.main ?? NSScreen.screens.first
+                }
+                self.relayout(animated: false)
+                self.syncSafeArea()
+            }
+        }
+        windowBehaviorObserver = NotificationCenter.default.addObserver(
+            forName: .slotDockWindowBehaviorDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.applyWindowBehavior() }
+        }
     }
 
     func invalidate() {
@@ -87,6 +116,16 @@ final class DockWindowController: NSObject {
             NotificationCenter.default.removeObserver(settingsObserver)
             self.settingsObserver = nil
         }
+        if let screenParametersObserver {
+            NotificationCenter.default.removeObserver(screenParametersObserver)
+            self.screenParametersObserver = nil
+        }
+        if let windowBehaviorObserver {
+            NotificationCenter.default.removeObserver(windowBehaviorObserver)
+            self.windowBehaviorObserver = nil
+        }
+        collapseWorkItem?.cancel()
+        collapseWorkItem = nil
         if let globalMouseMonitor {
             NSEvent.removeMonitor(globalMouseMonitor)
             self.globalMouseMonitor = nil
@@ -104,6 +143,9 @@ final class DockWindowController: NSObject {
             buildWindow()
         }
         guard let window else { return }
+        if activeScreen == nil {
+            activeScreen = screenUnderPointer() ?? NSScreen.main ?? NSScreen.screens.first
+        }
         positionOnScreen(animated: false)
         SlotDockHeadless.surface(window)
         installMouseMonitor()
@@ -175,7 +217,9 @@ final class DockWindowController: NSObject {
         // No hard 0.07 floor — low base values stay snappy (see DockPreferences.scaledRevealDuration).
         let fraction = min(1.0, Double(heightDelta / travel))
         let base = duration ?? revealBaseDuration
-        let resolvedDuration = DockPreferences.scaledRevealDuration(base: base, heightFraction: fraction)
+        let resolvedDuration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+            ? 0
+            : DockPreferences.scaledRevealDuration(base: base, heightFraction: fraction)
 
         animationGeneration &+= 1
         let generation = animationGeneration
@@ -259,6 +303,7 @@ final class DockWindowController: NSObject {
         if !store.preferences.safeAreaPadding {
             // Option off: restore only windows we previously moved.
             safeArea.restoreAllTracked()
+            store.safeAreaError = safeArea.lastError
             return
         }
         safeArea.sync(
@@ -267,13 +312,11 @@ final class DockWindowController: NSObject {
             extraGap: CGFloat(store.preferences.safeAreaExtraGap),
             screen: window?.screen ?? NSScreen.main
         )
+        store.safeAreaError = safeArea.lastError
     }
 
     func openSettings(tab: SlotDockStore.SettingsTab = .slots) {
-        // Updates state + posts notification; observer calls presentSettingsWindow.
-        // Also present immediately so direct controller calls stay synchronous.
         store.openSettings(tab: tab)
-        presentSettingsWindow(tab: tab)
     }
 
     /// Actually show the settings NSWindow (safe to call more than once).
@@ -299,7 +342,8 @@ final class DockWindowController: NSObject {
         )
         panel.isFloatingPanel = true
         panel.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.floatingWindow)) + 1)
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        self.window = panel
+        applyWindowBehavior()
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
@@ -318,8 +362,16 @@ final class DockWindowController: NSObject {
         host.autoresizingMask = [.width, .height]
         panel.contentView = host
 
-        self.window = panel
         self.hosting = host
+    }
+
+    private func applyWindowBehavior() {
+        guard let panel = window else { return }
+        var behavior: NSWindow.CollectionBehavior = [.canJoinAllSpaces, .stationary]
+        if store.preferences.showInFullScreen {
+            behavior.insert(.fullScreenAuxiliary)
+        }
+        panel.collectionBehavior = behavior
     }
 
     private func refreshChrome() {
@@ -341,7 +393,10 @@ final class DockWindowController: NSObject {
     }
 
     private func frameForHeight(_ height: CGFloat) -> NSRect {
-        let screen = screenUnderPointer() ?? NSScreen.main ?? NSScreen.screens.first
+        frameForHeight(height, on: activeScreen ?? screenUnderPointer() ?? NSScreen.main ?? NSScreen.screens.first)
+    }
+
+    private func frameForHeight(_ height: CGFloat, on screen: NSScreen?) -> NSRect {
         guard let screen else {
             return NSRect(x: 100, y: 40, width: 400, height: height)
         }
@@ -464,9 +519,13 @@ final class DockWindowController: NSObject {
         guard let screen = pointerScreen else { return }
         let visible = screen.visibleFrame
         let overStrip = isPointerOverStripContent(point: loc, window: window)
-        let mid = window.frame.midX
+        // Use the frame the strip would have on the pointer's display. The
+        // current window can still belong to the previous display during the
+        // edge-crossing sample.
+        let pointerFrame = frameForHeight(window.frame.height, on: screen)
+        let mid = pointerFrame.midX
         let half = DockPreferences.edgeHitHalfWidth(
-            stripWidth: window.frame.width,
+            stripWidth: pointerFrame.width,
             overshoot: store.preferences.edgeHorizontalOvershoot
         )
         let nearBottom = store.preferences.edgeHover && ScreenGeometry.isNearBottomEdge(
@@ -478,8 +537,10 @@ final class DockWindowController: NSObject {
         )
 
         // If the pointer is on another display's bottom edge, re-home the strip there.
-        if nearBottom, let under = screenUnderPointer(), under != window.screen {
-            positionOnScreen(animated: false)
+        if nearBottom, let under = screenUnderPointer(), under !== activeScreen {
+            activeScreen = under
+            let pointerFrame = frameForHeight(window.frame.height, on: under)
+            window.setFrame(pointerFrame, display: true)
         }
 
         // Snappy auto-hide: click outside the strip collapses (does not quit the app).
