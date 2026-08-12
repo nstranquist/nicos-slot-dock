@@ -145,6 +145,7 @@ struct SlotStoreTests {
 
         #expect(store.add(label: "App", target: "/Applications/Notes.app", id: "app") != nil)
         #expect(store.add(label: "App again", target: "/Applications/Notes.app/", id: "app-2") == nil)
+        #expect(store.add(label: "File URL duplicate", target: "file:///Applications/Notes.app/", id: "app-3") == nil)
         #expect(store.slots.count == 2)
     }
 
@@ -177,6 +178,28 @@ struct SlotStoreTests {
         #expect(store.lastError != nil)
         let preserved = try Data(contentsOf: url)
         #expect(preserved == original)
+    }
+
+    @Test("duplicate loaded targets stay preserved and read-only")
+    func duplicateLoadedTargetsFailClosed() throws {
+        let url = tempURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let document = SlotDocument(
+            version: ConfigDocumentVersion.current,
+            slots: [
+                Slot(id: "one", label: "One", target: "/Applications/Notes.app", sortOrder: 0),
+                Slot(id: "two", label: "Two", target: "file:///Applications/Notes.app/", sortOrder: 1),
+            ]
+        )
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let original = try JSONEncoder().encode(document)
+        try original.write(to: url)
+
+        let store = SlotStore(fileURL: url)
+        #expect(store.isReadOnly)
+        #expect(store.lastError?.localizedDescription.contains("duplicate target") == true)
+        #expect(store.slots.count == 2)
+        #expect(try Data(contentsOf: url) == original)
     }
 
     @Test("loaded slots repair identity and whitespace drift")

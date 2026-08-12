@@ -411,8 +411,8 @@ final class SlotDockStore: ObservableObject {
         let outcome = DropPathResolver.resolve(raw)
         switch outcome {
         case .accept(let c):
-            let norm = (c.target as NSString).standardizingPath.lowercased()
-            if slots.contains(where: { ($0.target as NSString).standardizingPath.lowercased() == norm }) {
+            let norm = SystemDockEntry.canonicalIdentityPath(c.target).lowercased()
+            if slots.contains(where: { SystemDockEntry.canonicalIdentityPath($0.target).lowercased() == norm }) {
                 lastLaunchError = "Already on strip: \(c.label)"
                 return .reject("Already on strip: \(c.label)")
             }

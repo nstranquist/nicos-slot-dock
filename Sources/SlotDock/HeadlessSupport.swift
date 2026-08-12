@@ -53,17 +53,28 @@ enum SlotDockHeadless {
                         }
                     }
                     let compositionValid: Bool = {
+                        let customCount = store.displayItems.filter { $0.origin == .custom }.count
+                        let systemDisplayCount = store.displayItems.filter { $0.origin == .systemDock }.count
+                        let runningDisplayCount = store.displayItems.filter { $0.origin == .running }.count
                         switch store.preferences.systemDockIntegration {
                         case .off:
                             return validOrigins && uniqueDisplayIDs
-                                && store.displayItems.allSatisfy { $0.origin == .custom }
+                                && customCount == slotCount
+                                && systemDisplayCount == 0
+                                && runningDisplayCount == 0
+                                && displayCount == slotCount
                         case .mirror:
                             return validOrigins && uniqueDisplayIDs
-                                && store.displayItems.count == systemCount
+                                && customCount == 0
+                                && runningDisplayCount == 0
+                                && systemDisplayCount == systemCount
+                                && displayCount == systemCount
                                 && store.displayItems.allSatisfy { $0.origin == .systemDock }
                         case .merge:
                             return validOrigins && uniqueDisplayIDs
-                                && displayCount >= (slotCount == 0 ? 0 : 1)
+                                && customCount == slotCount
+                                && systemDisplayCount == systemCount
+                                && displayCount == customCount + systemDisplayCount + runningDisplayCount
                         }
                     }()
                     let ok = dockVisible

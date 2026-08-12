@@ -312,6 +312,16 @@ public final class SlotStore {
             normalizeOrder()
             return
         }
+        if !result.readOnly, let duplicateTarget = Self.duplicateTarget(in: loaded.slots) {
+            let error = SlotStoreError.decodeFailed(
+                "Configuration contains duplicate target \(duplicateTarget). It is read-only until repaired."
+            )
+            lastError = error
+            isReadOnly = true
+            readOnlyError = error
+            document = loaded
+            return
+        }
         let migration = ConfigMigration.migratePreferences(
             documentVersion: loaded.version,
             preferences: loaded.preferences
@@ -380,6 +390,17 @@ public final class SlotStore {
         return name.isEmpty ? (path.isEmpty ? "Slot" : path) : name
     }
 
+    private static func duplicateTarget(in slots: [Slot]) -> String? {
+        var targets = Set<String>()
+        for slot in slots {
+            let target = slot.target.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !target.isEmpty else { continue }
+            let key = targetKey(target)
+            guard targets.insert(key).inserted else { return target }
+        }
+        return nil
+    }
+
     /// Stable duplicate key for both filesystem targets and URL targets.
     /// Filesystem normalization is case-preserving in storage, while the key
     /// follows the macOS default case-insensitive behavior used by Finder.
@@ -391,7 +412,7 @@ public final class SlotStore {
         {
             return url.absoluteString.lowercased()
         }
-        return SystemDockEntry.canonicalIdentityPath((trimmed as NSString).standardizingPath).lowercased()
+        return SystemDockEntry.canonicalIdentityPath(trimmed).lowercased()
     }
 
     /// Repair harmless semantic drift in decodable documents before the UI sees

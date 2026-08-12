@@ -7,11 +7,11 @@ public struct AppIdentity: Equatable, Hashable, Sendable {
 
     public init(bundleIdentifier: String? = nil, path: String? = nil) {
         self.bundleIdentifier = bundleIdentifier
-        self.path = path.map { SystemDockEntry.normalizePath($0) }
+        self.path = path.map { SystemDockEntry.canonicalIdentityPath($0) }
     }
 
     public static func from(slot: Slot) -> AppIdentity {
-        let path = SystemDockEntry.normalizePath(slot.target)
+        let path = SystemDockEntry.canonicalIdentityPath(slot.target)
         // sysdock:com.foo.bar → bundle id
         var bundle: String?
         if slot.id.hasPrefix("sysdock:") {
@@ -32,10 +32,10 @@ public struct AppIdentity: Equatable, Hashable, Sendable {
 public struct RunningAppInfo: Equatable, Sendable, Identifiable {
     public var id: String {
         if let b = bundleIdentifier, !b.isEmpty {
-            let normalized = SystemDockEntry.normalizePath(path)
+            let normalized = SystemDockEntry.canonicalIdentityPath(path)
             return normalized.isEmpty ? "running:\(b)" : "running:\(b):\(normalized)"
         }
-        return "running:\(SystemDockEntry.normalizePath(path))"
+        return "running:\(SystemDockEntry.canonicalIdentityPath(path))"
     }
 
     public var bundleIdentifier: String?
@@ -44,7 +44,7 @@ public struct RunningAppInfo: Equatable, Sendable, Identifiable {
 
     public init(bundleIdentifier: String? = nil, path: String, name: String) {
         self.bundleIdentifier = bundleIdentifier
-        self.path = SystemDockEntry.normalizePath(path)
+        self.path = SystemDockEntry.canonicalIdentityPath(path)
         self.name = name
     }
 
@@ -72,7 +72,7 @@ public struct RunningAppSnapshot: Equatable, Sendable {
         apps: [RunningAppInfo] = []
     ) {
         self.bundleIdentifiers = Set(bundleIdentifiers.map { $0.lowercased() })
-        self.paths = Set(paths.map { SystemDockEntry.normalizePath($0).lowercased() })
+        self.paths = Set(paths.map { SystemDockEntry.canonicalIdentityPath($0).lowercased() })
         self.apps = apps
     }
 
@@ -95,7 +95,7 @@ public struct RunningAppSnapshot: Equatable, Sendable {
                     return true
                 }
                 return sameBundle.contains { app in
-                    return SystemDockEntry.normalizePath(app.path).lowercased() == p
+                    return SystemDockEntry.canonicalIdentityPath(app.path).lowercased() == p
                 }
             }
             return true
@@ -105,7 +105,7 @@ public struct RunningAppSnapshot: Equatable, Sendable {
         }
         // Path may be .app bundle; also check without trailing variations
         if let p = identity.path {
-            let lower = SystemDockEntry.normalizePath(p).lowercased()
+            let lower = SystemDockEntry.canonicalIdentityPath(p).lowercased()
             if paths.contains(where: { $0 == lower || $0.hasPrefix(lower + "/") || lower.hasPrefix($0 + "/") }) {
                 return true
             }
@@ -121,12 +121,12 @@ public enum TransientRunningApps {
         stripPaths: Set<String>,
         stripBundles: Set<String>
     ) -> [RunningAppInfo] {
-        let paths = Set(stripPaths.map { SystemDockEntry.normalizePath($0).lowercased() })
+        let paths = Set(stripPaths.map { SystemDockEntry.canonicalIdentityPath($0).lowercased() })
         let bundles = Set(stripBundles.map { $0.lowercased() })
         var out: [RunningAppInfo] = []
         var seen = Set<String>()
         for app in running {
-            let pathKey = app.path.lowercased()
+            let pathKey = SystemDockEntry.canonicalIdentityPath(app.path).lowercased()
             if !pathKey.isEmpty, paths.contains(pathKey) { continue }
             if let b = app.bundleIdentifier?.lowercased(), !b.isEmpty, bundles.contains(b) {
                 continue

@@ -3,8 +3,8 @@ import Foundation
 /// One item from the user's system macOS Dock (`com.apple.dock` persistent-apps).
 public struct SystemDockEntry: Equatable, Sendable, Identifiable {
     public var id: String {
-        let identity = bundleIdentifier.map { "bundle:\($0)" } ?? "path:\(normalizedPath)"
-        return guid.map { "dock:\($0):\(identity)" } ?? "dock:\(identity):\(normalizedPath)"
+        let identity = bundleIdentifier.map { "bundle:\($0):\(identityPath)" } ?? "path:\(identityPath)"
+        return guid.map { "dock:\($0):\(identity)" } ?? "dock:\(identity)"
     }
     public var label: String
     public var path: String
@@ -21,6 +21,12 @@ public struct SystemDockEntry: Equatable, Sendable, Identifiable {
     /// Stable path key for dedupe (trailing slash stripped, file URL decoded).
     public var normalizedPath: String {
         Self.normalizePath(path)
+    }
+
+    /// Canonical path used for identity/deduplication while preserving
+    /// `path` as the user-facing launch/display spelling.
+    public var identityPath: String {
+        Self.canonicalIdentityPath(path)
     }
 
     public static func normalizePath(_ raw: String) -> String {
@@ -201,7 +207,7 @@ public enum SystemDockReader {
 
     /// Convert a system Dock entry into a Slot (stable id from path/bundle).
     public static func slot(from entry: SystemDockEntry) -> Slot {
-        let identity = entry.bundleIdentifier.map { "\($0):\(entry.normalizedPath)" } ?? entry.normalizedPath
+        let identity = entry.bundleIdentifier.map { "\($0):\(entry.identityPath)" } ?? entry.identityPath
         let id = "sysdock:" + identity
         return Slot(
             id: id,
@@ -269,7 +275,7 @@ public enum SlotComposer {
             var order = 0
 
             for slot in custom.sorted(by: { $0.sortOrder < $1.sortOrder }) {
-                let key = SystemDockEntry.normalizePath(slot.target).lowercased()
+                let key = SystemDockEntry.canonicalIdentityPath(slot.target).lowercased()
                 if !key.isEmpty, seenPaths.contains(key) { continue }
                 if !key.isEmpty { seenPaths.insert(key) }
                 var s = slot
@@ -279,7 +285,7 @@ public enum SlotComposer {
             }
 
             for entry in system {
-                let key = entry.normalizedPath.lowercased()
+                let key = entry.identityPath.lowercased()
                 // Skip system apps already represented by a custom slot (or prior system entry).
                 guard !seenPaths.contains(key) else { continue }
                 seenPaths.insert(key)
@@ -326,7 +332,7 @@ public enum SlotComposer {
         custom: [Slot]
     ) -> [SystemDockEntry] {
         let existing = customPathKeys(custom)
-        return system.filter { !existing.contains($0.normalizedPath.lowercased()) }
+        return system.filter { !existing.contains($0.identityPath.lowercased()) }
     }
 
     /// Whether this system Dock path is already a custom slot.
@@ -334,7 +340,7 @@ public enum SlotComposer {
         entry: SystemDockEntry,
         custom: [Slot]
     ) -> Bool {
-        customPathKeys(custom).contains(entry.normalizedPath.lowercased())
+        customPathKeys(custom).contains(entry.identityPath.lowercased())
     }
 
     /// Resolve a dragged path (or path+label payload) against live system Dock entries.
@@ -342,12 +348,12 @@ public enum SlotComposer {
         _ path: String,
         in system: [SystemDockEntry]
     ) -> SystemDockEntry? {
-        let key = SystemDockEntry.normalizePath(path).lowercased()
-        return system.first { $0.normalizedPath.lowercased() == key }
+        let key = SystemDockEntry.canonicalIdentityPath(path).lowercased()
+        return system.first { $0.identityPath.lowercased() == key }
     }
 
     private static func customPathKeys(_ custom: [Slot]) -> Set<String> {
-        Set(custom.map { SystemDockEntry.normalizePath($0.target).lowercased() }.filter { !$0.isEmpty })
+        Set(custom.map { SystemDockEntry.canonicalIdentityPath($0.target).lowercased() }.filter { !$0.isEmpty })
     }
 }
 

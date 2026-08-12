@@ -15,6 +15,13 @@ struct SystemDockReaderTests {
         try Data("target".utf8).write(to: target)
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
         #expect(SystemDockEntry.canonicalIdentityPath(link.path) == target.path)
+
+        let custom = Slot(id: "custom", label: "Link", target: link.path)
+        let system = SystemDockEntry(label: "Target", path: target.path)
+        #expect(SlotComposer.isAlreadyCustom(entry: system, custom: [custom]))
+        let composed = SlotComposer.compose(custom: [custom], system: [system], mode: .merge)
+        #expect(composed.count == 1)
+        #expect(composed.first?.origin == .custom)
     }
 
     /// Minimal XML plist fixture matching Dock persistent-apps shape.
