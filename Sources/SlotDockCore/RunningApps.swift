@@ -10,22 +10,50 @@ public struct AppIdentity: Equatable, Hashable, Sendable {
         self.path = path.map { SystemDockEntry.canonicalIdentityPath($0) }
     }
 
-    public static func from(slot: Slot) -> AppIdentity {
+    public static func from(slot: Slot, resolveBundleFromDisk: Bool = true) -> AppIdentity {
         let path = SystemDockEntry.canonicalIdentityPath(slot.target)
-        // sysdock:com.foo.bar → bundle id
-        var bundle: String?
-        if slot.id.hasPrefix("sysdock:") {
-            let rest = String(slot.id.dropFirst("sysdock:".count))
-            let candidate = rest.split(separator: ":", maxSplits: 1).first.map(String.init) ?? rest
-            if candidate.contains(".") && !candidate.hasPrefix("/") {
-                bundle = candidate
-            }
+        var bundle = bundleIdentifier(fromSlotID: slot.id)
+        if bundle == nil, resolveBundleFromDisk {
+            bundle = bundleIdentifier(forAppPath: path)
         }
         return AppIdentity(
             bundleIdentifier: bundle,
             path: path.isEmpty || path.hasPrefix("http") ? nil : path
         )
     }
+
+    /// `sysdock:<bundle>:<path>` / `running:<bundle>:<path>` ids carry the bundle
+    /// without touching the filesystem.
+    public static func bundleIdentifier(fromSlotID id: String) -> String? {
+        let prefixes = ["sysdock:", "running:"]
+        guard let prefix = prefixes.first(where: { id.hasPrefix($0) }) else { return nil }
+        let rest = String(id.dropFirst(prefix.count))
+        let candidate = rest.split(separator: ":", maxSplits: 1).first.map(String.init) ?? rest
+        if candidate.contains(".") && !candidate.hasPrefix("/") {
+            return candidate
+        }
+        return nil
+    }
+
+    /// Reads `CFBundleIdentifier` from an `.app` wrapper. Missing / non-app paths return nil.
+    public static func bundleIdentifier(forAppPath path: String) -> String? {
+        let canonical = SystemDockEntry.canonicalIdentityPath(path)
+        guard canonical.lowercased().hasSuffix(".app") else { return nil }
+        bundleCacheLock.lock()
+        if let cached = bundleCache[canonical] {
+            bundleCacheLock.unlock()
+            return cached.isEmpty ? nil : cached
+        }
+        bundleCacheLock.unlock()
+        let resolved = Bundle(url: URL(fileURLWithPath: canonical))?.bundleIdentifier ?? ""
+        bundleCacheLock.lock()
+        bundleCache[canonical] = resolved
+        bundleCacheLock.unlock()
+        return resolved.isEmpty ? nil : resolved
+    }
+
+    private static let bundleCacheLock = NSLock()
+    private nonisolated(unsafe) static var bundleCache: [String: String] = [:]
 }
 
 /// One running GUI app (for optional transient strip icons).

@@ -233,6 +233,11 @@ final class SlotDockStore: ObservableObject {
         SlotDockTelemetry.preferences.info("showRunningDots=\(on, privacy: .public)")
     }
 
+    func setShowNotificationBadges(_ on: Bool) {
+        updatePreferences { $0.showNotificationBadges = on }
+        SlotDockTelemetry.preferences.info("showNotificationBadges=\(on, privacy: .public)")
+    }
+
     func setSafeAreaPadding(_ on: Bool) {
         if updatePreferences({ $0.safeAreaPadding = on }) {
             NotificationCenter.default.post(name: .slotDockSafeAreaPreferenceDidChange, object: nil)

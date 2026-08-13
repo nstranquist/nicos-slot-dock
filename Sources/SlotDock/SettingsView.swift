@@ -875,6 +875,12 @@ struct OptionsView: View {
                 ))
                 .help("Small indicator under apps that are already open")
 
+                Toggle("Notification badges", isOn: Binding(
+                    get: { store.preferences.showNotificationBadges },
+                    set: { store.setShowNotificationBadges($0) }
+                ))
+                .help("Red counts on strip icons, matching the Mac Dock. Messages/WhatsApp may need Accessibility if Launch Services does not publish a badge.")
+
                 Toggle("Window safe-area padding", isOn: Binding(
                     get: { store.preferences.safeAreaPadding },
                     set: { store.setSafeAreaPadding($0) }

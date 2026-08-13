@@ -15,6 +15,7 @@ final class DockWindowController: NSObject {
     private(set) var window: NSPanel?
     private let store: SlotDockStore
     let runningApps: RunningAppsMonitor
+    let badges: DockBadgeMonitor
     let safeArea: SafeAreaController
     private var hosting: NSHostingView<DockChrome>?
     private var settingsController: SettingsWindowController?
@@ -56,9 +57,15 @@ final class DockWindowController: NSObject {
     /// Height used for safe-area clearance (expanded strip).
     var stripPadHeight: CGFloat { expandedHeight }
 
-    init(store: SlotDockStore, runningApps: RunningAppsMonitor? = nil, safeArea: SafeAreaController? = nil) {
+    init(
+        store: SlotDockStore,
+        runningApps: RunningAppsMonitor? = nil,
+        badges: DockBadgeMonitor? = nil,
+        safeArea: SafeAreaController? = nil
+    ) {
         self.store = store
         self.runningApps = runningApps ?? RunningAppsMonitor()
+        self.badges = badges ?? DockBadgeMonitor()
         self.safeArea = safeArea ?? SafeAreaController()
         super.init()
         // Event-driven: recompose only when transient strip membership changes.
@@ -135,6 +142,7 @@ final class DockWindowController: NSObject {
             self.localMouseMonitor = nil
         }
         runningApps.invalidate()
+        badges.invalidate()
         safeArea.restoreAllTracked()
     }
 
@@ -356,7 +364,7 @@ final class DockWindowController: NSObject {
         panel.animationBehavior = .none
         panel.worksWhenModal = true
 
-        let chrome = DockChrome(store: store, runningApps: runningApps, controller: self)
+        let chrome = DockChrome(store: store, runningApps: runningApps, badges: badges, controller: self)
         let host = NSHostingView(rootView: chrome)
         host.frame = panel.contentView?.bounds ?? .zero
         host.autoresizingMask = [.width, .height]
@@ -375,7 +383,7 @@ final class DockWindowController: NSObject {
     }
 
     private func refreshChrome() {
-        hosting?.rootView = DockChrome(store: store, runningApps: runningApps, controller: self)
+        hosting?.rootView = DockChrome(store: store, runningApps: runningApps, badges: badges, controller: self)
     }
 
     // MARK: - Geometry
@@ -708,6 +716,7 @@ final class DockWindowController: NSObject {
 struct DockChrome: View {
     @ObservedObject var store: SlotDockStore
     @ObservedObject var runningApps: RunningAppsMonitor
+    @ObservedObject var badges: DockBadgeMonitor
     weak var controller: DockWindowController?
 
     var body: some View {
@@ -726,6 +735,7 @@ struct DockChrome: View {
                 DockView(
                     store: store,
                     runningApps: runningApps,
+                    badges: badges,
                     onHoverChange: { hovering in
                         controller?.userHoveredDock(hovering)
                     },
@@ -751,7 +761,12 @@ struct DockChrome: View {
         .onAppear {
             _ = store.refreshSystemDock()
             runningApps.refresh()
+            badges.start()
+            badges.setCollectBadges(store.preferences.showNotificationBadges)
             controller?.syncSafeArea()
+        }
+        .onChange(of: store.preferences.showNotificationBadges) { _, on in
+            badges.setCollectBadges(on)
         }
         .onChange(of: store.reveal.phase) { _, phase in
             // Controls menu / store-only phase flips: coalesce with any explicit request.

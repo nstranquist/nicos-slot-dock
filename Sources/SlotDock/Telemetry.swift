@@ -40,6 +40,7 @@ enum SlotDockTelemetry {
     static let preferences = Logger(subsystem: subsystem, category: "Preferences")
     static let systemDock = Logger(subsystem: subsystem, category: "SystemDock")
     static let running = Logger(subsystem: subsystem, category: "Running")
+    static let badge = Logger(subsystem: subsystem, category: "Badge")
     static let performance = Logger(subsystem: subsystem, category: "Performance")
     static let windowing = Logger(subsystem: subsystem, category: "Windowing")
     static let menu = Logger(subsystem: subsystem, category: "Menu")

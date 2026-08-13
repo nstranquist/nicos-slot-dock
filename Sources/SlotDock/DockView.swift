@@ -6,6 +6,7 @@ import SwiftUI
 struct DockView: View {
     @ObservedObject var store: SlotDockStore
     @ObservedObject var runningApps: RunningAppsMonitor
+    @ObservedObject var badges: DockBadgeMonitor
     var onHoverChange: ((Bool) -> Void)?
     var onOpenSettings: ((SlotDockStore.SettingsTab) -> Void)?
     var onShowControlsMenu: ((NSView?) -> Void)?
@@ -68,6 +69,11 @@ struct DockView: View {
                             // Dot visibility can be off; right-click still needs true running state.
                             isRunning: runningApps.isRunning(slot: item.slot),
                             showRunningDot: store.preferences.showRunningDots,
+                            badge: store.preferences.showNotificationBadges
+                                ? badges.badge(for: item.slot)
+                                : nil,
+                            liveIconToken: badges.liveIconToken(for: item.slot),
+                            progress: badges.progress(for: item.slot),
                             customIndex: item.origin == .custom
                                 ? store.customIndex(of: item.slot.id)
                                 : nil,
@@ -308,6 +314,10 @@ struct ControlsMenuButton: View {
                     get: { store.preferences.showTransientRunningApps },
                     set: { store.setShowTransientRunningApps($0) }
                 ))
+                Toggle("Notification Badges", isOn: Binding(
+                    get: { store.preferences.showNotificationBadges },
+                    set: { store.setShowNotificationBadges($0) }
+                ))
             }
             Section {
                 Button("All Options…") { onOpenOptions() }
@@ -336,6 +346,9 @@ struct SlotIconButton: View {
     var isFlashing: Bool = false
     var isRunning: Bool = false
     var showRunningDot: Bool = true
+    var badge: DockBadge?
+    var liveIconToken: String = ""
+    var progress: Double?
     var customIndex: Int?
     var customCount: Int = 0
     var canImportAsCustom: Bool = false
@@ -356,6 +369,10 @@ struct SlotIconButton: View {
         case .custom: break
         }
         if isRunning, item.origin != .running { parts.append("open") }
+        if let badge {
+            let text = DockBadgeFormatting.displayText(badge)
+            parts.append(text.isEmpty ? "unread" : text)
+        }
         return parts.joined(separator: " · ")
     }
 
@@ -364,9 +381,20 @@ struct SlotIconButton: View {
             ZStack {
                 RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
                     .fill(Color.primary.opacity(hovered || isFlashing || dragHighlight ? 0.12 : 0))
-                SlotIconImage(slot: slot, size: size - 6)
+                SlotIconImage(slot: slot, size: size - 6, liveToken: liveIconToken)
                     .frame(width: size - 6, height: size - 6)
                     .allowsHitTesting(false)
+                if let progress, progress > 0, progress < 1 {
+                    DockProgressRing(progress: progress)
+                        .frame(width: size - 4, height: size - 4)
+                        .allowsHitTesting(false)
+                }
+                if let badge {
+                    NotificationBadgeView(badge: badge, iconSize: size)
+                        .offset(x: 3, y: -2)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                        .allowsHitTesting(false)
+                }
                 // Native hit target owns click/drag/right-click so launch never
                 // races strip reorder (mouseUp click vs threshold drag).
                 StripIconHitRepresentable(
@@ -415,12 +443,21 @@ struct SlotIconButton: View {
             }
         }
         .onDisappear { NSCursor.arrow.set() }
-        .accessibilityLabel(isRunning ? "\(slot.label), running" : slot.label)
+        .accessibilityLabel(accessibilityName)
         .accessibilityHint(
             isCustom
                 ? "Click to open. Command-drag to reorder. Right-click for more."
                 : "Click to open. Right-click for Options (Keep as Custom Slot)."
         )
+    }
+
+    private var accessibilityName: String {
+        var parts = [slot.label]
+        if let badge {
+            parts.append(DockBadgeFormatting.accessibilityText(badge))
+        }
+        if isRunning { parts.append("running") }
+        return parts.joined(separator: ", ")
     }
 
     private func presentNativeMenu(with event: NSEvent) {
@@ -465,14 +502,17 @@ struct SlotIconButton: View {
 struct SlotIconImage: View {
     let slot: Slot
     let size: CGFloat
+    var liveToken: String = ""
 
     var body: some View {
         Group {
-            if let nsImage = SlotIconCache.image(for: slot, pointSize: size) {
-                Image(nsImage: nsImage)
+            if let resolved = SlotIconCache.resolved(for: slot, pointSize: size, liveToken: liveToken) {
+                Image(nsImage: resolved.image)
                     .resizable()
                     .interpolation(.high)
+                    .antialiased(true)
                     .aspectRatio(contentMode: .fit)
+                    .modifier(OptionalIconMask(enabled: resolved.appliesMask, cornerRadius: size * 0.2))
             } else {
                 ZStack {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -484,7 +524,57 @@ struct SlotIconImage: View {
             }
         }
         .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: size * 0.2, style: .continuous))
+    }
+}
+
+private struct OptionalIconMask: ViewModifier {
+    let enabled: Bool
+    let cornerRadius: CGFloat
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        } else {
+            content
+        }
+    }
+}
+
+private struct DockProgressRing: View {
+    let progress: Double
+
+    var body: some View {
+        Circle()
+            .trim(from: 0, to: max(0.02, min(1, progress)))
+            .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
+            .rotationEffect(.degrees(-90))
+    }
+}
+
+struct NotificationBadgeView: View {
+    let badge: DockBadge
+    let iconSize: CGFloat
+
+    var body: some View {
+        let text = DockBadgeFormatting.displayText(badge)
+        let diameter = max(12, iconSize * 0.36)
+        if text.isEmpty {
+            Circle()
+                .fill(Color(nsColor: .systemRed))
+                .overlay(Circle().strokeBorder(Color.white, lineWidth: 1.2))
+                .frame(width: diameter * 0.62, height: diameter * 0.62)
+                .shadow(color: .black.opacity(0.25), radius: 1, y: 0.5)
+        } else {
+            Text(text)
+                .font(.system(size: max(8, iconSize * 0.22), weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .monospacedDigit()
+                .padding(.horizontal, text.count > 1 ? 4 : 0)
+                .frame(minWidth: diameter, minHeight: diameter)
+                .background(Capsule(style: .continuous).fill(Color(nsColor: .systemRed)))
+                .overlay(Capsule(style: .continuous).strokeBorder(Color.white, lineWidth: 1.2))
+                .shadow(color: .black.opacity(0.25), radius: 1, y: 0.5)
+        }
     }
 }
 

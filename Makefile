@@ -1,12 +1,12 @@
-.PHONY: build run install uninstall clean test headless-smoke verify package
+.PHONY: build run install uninstall clean test headless-smoke verify package restart restart-dev
 
 APP_NAME := Slot Dock
 BUNDLE_NAME := SlotDock
 EXECUTABLE := SlotDock
 BUILD_DIR := .build/release
 APP_DIR := $(BUILD_DIR)/$(BUNDLE_NAME).app
-APP_VERSION ?= 0.2.0
-BUILD_NUMBER ?= 2
+APP_VERSION ?= 0.3.1
+BUILD_NUMBER ?= 4
 INSTALL_DIR := /Applications
 INSTALLED_APP := $(INSTALL_DIR)/Slot Dock.app
 BUNDLE_ID := com.nstranquist.nicos-slot-dock
@@ -31,15 +31,28 @@ build:
 run: build
 	@open "$(APP_DIR)"
 
-restart: build
+# Daily-driver restart: installed app if present, else the just-built bundle.
+restart:
+	@if [[ -d "$(INSTALLED_APP)" ]]; then \
+		pkill -x "$(EXECUTABLE)" 2>/dev/null || true; \
+		sleep 0.3; \
+		open "$(INSTALLED_APP)"; \
+		echo "  Restarted: $(INSTALLED_APP)"; \
+	else \
+		$(MAKE) install; \
+	fi
+
+restart-dev: build
 	@pkill -x "$(EXECUTABLE)" 2>/dev/null || true
 	@sleep 0.3
 	@open "$(APP_DIR)"
+	@echo "  Restarted: $(APP_DIR)"
 
 install: build
 	@set -euo pipefail; mkdir -p "$(INSTALL_DIR)"; stage="$$(mktemp -d "$(INSTALL_DIR)/.slot-dock-install.XXXXXX")"; backup="$(INSTALLED_APP).previous.$$(date +%Y%m%d%H%M%S)"; trap 'rm -rf "$$stage"; if [[ -n "$${moved:-}" && ! -e "$(INSTALLED_APP)" && -e "$$moved" ]]; then mv "$$moved" "$(INSTALLED_APP)"; fi' EXIT; ditto "$(APP_DIR)" "$$stage/Slot Dock.app"; if [[ -e "$(INSTALLED_APP)" ]]; then moved="$$backup"; mv "$(INSTALLED_APP)" "$$moved"; fi; mv "$$stage/Slot Dock.app" "$(INSTALLED_APP)"; trap - EXIT; rmdir "$$stage" 2>/dev/null || true
 	@/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$(INSTALLED_APP)" 2>/dev/null || true
 	@echo "  Installed: $(INSTALLED_APP)"
+	@if pgrep -xq "$(EXECUTABLE)"; then pkill -x "$(EXECUTABLE)" || true; sleep 0.3; echo "  Restarted running instance"; fi
 	@open "$(INSTALLED_APP)"
 
 uninstall:

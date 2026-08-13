@@ -35,6 +35,7 @@ struct DockPreferencesTests {
         #expect(DockPreferences.IconSize.small.pointSize == 36)
         #expect(DockPreferences.IconSize.large.pointSize == 52)
         #expect(p.showStatusItem == true)
+        #expect(p.showNotificationBadges == true)
         #expect(p.launchAtLogin == false)
         #expect(p.hotkeys.globalEnabled == false)
         #expect(p.hotkeys.toggleDock.enabled == false)

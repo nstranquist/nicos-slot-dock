@@ -84,6 +84,8 @@ public struct DockPreferences: Codable, Equatable, Sendable {
     public var showSystemDockDivider: Bool
     /// Show a minimal running-app dot under open apps.
     public var showRunningDots: Bool
+    /// Overlay Mac Dock notification badges (counts / unread marks) on strip icons.
+    public var showNotificationBadges: Bool
     /// Opt-in: append running GUI apps not already on the strip (event-driven, ephemeral).
     public var showTransientRunningApps: Bool
     /// Opt-in: inset overlapping windows so content clears the Slot Dock strip.
@@ -117,6 +119,7 @@ public struct DockPreferences: Codable, Equatable, Sendable {
         systemDockIntegration: SystemDockIntegration = .merge,
         showSystemDockDivider: Bool = true,
         showRunningDots: Bool = true,
+        showNotificationBadges: Bool = true,
         showTransientRunningApps: Bool = false,
         safeAreaPadding: Bool = false,
         safeAreaExtraGap: Double = 8,
@@ -143,6 +146,7 @@ public struct DockPreferences: Codable, Equatable, Sendable {
         self.systemDockIntegration = systemDockIntegration
         self.showSystemDockDivider = showSystemDockDivider
         self.showRunningDots = showRunningDots
+        self.showNotificationBadges = showNotificationBadges
         self.showTransientRunningApps = showTransientRunningApps
         self.safeAreaPadding = safeAreaPadding
         self.safeAreaExtraGap = Self.clampSafeAreaExtraGap(safeAreaExtraGap)
@@ -384,6 +388,7 @@ public struct DockPreferences: Codable, Equatable, Sendable {
         systemDockIntegration = try c.decodeIfPresent(SystemDockIntegration.self, forKey: .systemDockIntegration) ?? .merge
         showSystemDockDivider = try c.decodeIfPresent(Bool.self, forKey: .showSystemDockDivider) ?? true
         showRunningDots = try c.decodeIfPresent(Bool.self, forKey: .showRunningDots) ?? true
+        showNotificationBadges = try c.decodeIfPresent(Bool.self, forKey: .showNotificationBadges) ?? true
         showTransientRunningApps = try c.decodeIfPresent(Bool.self, forKey: .showTransientRunningApps) ?? false
         safeAreaPadding = try c.decodeIfPresent(Bool.self, forKey: .safeAreaPadding) ?? false
         safeAreaExtraGap = try c.decodeIfPresent(Double.self, forKey: .safeAreaExtraGap) ?? 8
@@ -397,7 +402,8 @@ public struct DockPreferences: Codable, Equatable, Sendable {
         case edgeHorizontalOvershoot, revealBaseDuration, iconSpacing
         case showLabels, showIconTooltips, alignment, launchFeedback, hotkeys, showStatusItem, showInFullScreen
         case systemDockIntegration, showSystemDockDivider
-        case showRunningDots, showTransientRunningApps, safeAreaPadding, safeAreaExtraGap, collisionGuideDismissed
+        case showRunningDots, showNotificationBadges, showTransientRunningApps
+        case safeAreaPadding, safeAreaExtraGap, collisionGuideDismissed
         case launchAtLogin
     }
 }

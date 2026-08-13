@@ -223,6 +223,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         SlotDockTelemetry.appLifecycle.debug("applicationDidBecomeActive — reconcile dock + running")
         _ = store.refreshSystemDock()
         dockController.runningApps.refresh(reason: "app-active", immediate: true)
+        dockController.badges.refresh(reason: "app-active")
         dockController.relayout(animated: true)
     }
 
@@ -328,6 +329,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     binding: digitBinding
                 )
                 item.representedObject = composed.slot.id
+                if store.preferences.showNotificationBadges,
+                   let badge = dockController.badges.badge(for: composed.slot)
+                {
+                    let text = DockBadgeFormatting.displayText(badge)
+                    item.title = text.isEmpty
+                        ? "  \(composed.slot.label)  •"
+                        : "  \(composed.slot.label)  \(text)"
+                }
                 if let icon = statusIcon(for: composed.slot) {
                     icon.size = NSSize(width: 16, height: 16)
                     item.image = icon
@@ -384,6 +393,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         tooltips.target = self
         tooltips.state = store.preferences.showIconTooltips ? .on : .off
         options.addItem(tooltips)
+
+        let badges = NSMenuItem(title: "Notification Badges", action: #selector(toggleNotificationBadges), keyEquivalent: "")
+        badges.target = self
+        badges.state = store.preferences.showNotificationBadges ? .on : .off
+        options.addItem(badges)
 
         let feedback = NSMenuItem(title: "Launch Feedback", action: #selector(toggleFeedback), keyEquivalent: "")
         feedback.target = self
@@ -514,12 +528,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func statusIcon(for slot: Slot) -> NSImage? {
-        let request = LaunchResolver.resolve(slot: slot)
-        if request.kind == .application || request.kind == .file, !request.resolvedTarget.isEmpty {
-            return NSWorkspace.shared.icon(forFile: request.resolvedTarget)
-        }
-        if request.kind == .url {
-            return NSImage(systemSymbolName: "link", accessibilityDescription: slot.label)
+        let token = dockController.badges.liveIconToken(for: slot)
+        if let image = SlotIconCache.image(for: slot, pointSize: 16, liveToken: token) {
+            return image
         }
         return nil
     }
@@ -564,6 +575,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func toggleIconTooltips() {
         store.setShowIconTooltips(!store.preferences.showIconTooltips)
+    }
+
+    @objc private func toggleNotificationBadges() {
+        store.setShowNotificationBadges(!store.preferences.showNotificationBadges)
     }
 
     @objc private func openMacDockSettings() {

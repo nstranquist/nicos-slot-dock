@@ -36,6 +36,7 @@ struct ConfigMigrationTests {
         #expect(store.document.version == ConfigDocumentVersion.current)
         // Modern defaults present after migration
         #expect(store.preferences.showRunningDots == true)
+        #expect(store.preferences.showNotificationBadges == true)
         #expect(store.preferences.systemDockIntegration == .merge)
         #expect(store.preferences.launchAtLogin == false)
         #expect(store.preferences.showTransientRunningApps == false)
