@@ -9,6 +9,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Add universal-build, privacy, secret, CI, and notarized-release gates.
 - Add public contributor, security, privacy, provenance, and architecture docs.
 - Approve an identity-bound catalog logo and reviewed public portfolio manifest.
+- Pin GitHub Actions to verified upstream commit digests.
 
 ## 0.3.1 - 2026-08-14
 
