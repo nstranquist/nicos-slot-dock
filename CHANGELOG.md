@@ -11,6 +11,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Approve an identity-bound catalog logo and reviewed public portfolio manifest.
 - Pin GitHub Actions to verified upstream commit digests.
 - Expose the complete `make publish-ready` source gate through the external catalog manifest.
+- Give the complete gate enough time for a cold Swift and universal build.
 
 ## 0.3.1 - 2026-08-14
 
