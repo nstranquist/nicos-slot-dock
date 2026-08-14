@@ -9,7 +9,7 @@ jtbd: Launch custom applications, files, and URLs while optionally merging syste
 pricing: Free and open source under MIT.
 launch: built
 license: MIT
-role: supporting
+role: experiment
 tags:
   - swift
   - macos
