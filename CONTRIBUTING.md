@@ -19,16 +19,16 @@ make verify-universal
 ```
 
 Maintainers run `make publish-ready` before a source release. New behavior must
-include deterministic tests where practical. Permission-dependent behavior
-must fail safely when the permission is absent.
+include deterministic tests where practical. If a permission is absent, the
+dependent behavior must fail safely.
 
 ## Pull requests
 
 - Keep each change focused.
 - Explain user-visible behavior and security or privacy impact.
 - Update `CHANGELOG.md` for user-visible changes.
-- Update `PRIVACY.md` if data handling, logging, permissions, or network access
-  changes.
+- If data handling, logging, permissions, or network access changes, update
+  `PRIVACY.md`.
 - Do not commit build output, local configuration, signing material, or
   notarization credentials.
 

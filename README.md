@@ -1,9 +1,12 @@
 # Nicos Slot Dock
 
 Nicos Slot Dock is a native macOS launcher strip that works alongside the
-system Dock. Add custom applications, files, and URLs; merge or mirror the
-system Dock; show running applications and notification badges; and reveal the
-strip from the screen edge, menu bar, or an optional keyboard shortcut.
+system Dock. It can:
+
+- add custom applications, files, and URLs.
+- merge or mirror the system Dock.
+- show running applications and notification badges.
+- reveal the strip from the screen edge, menu bar, or an optional shortcut.
 
 The project is open source under the MIT License and is being prepared
 for its first public source release. There is currently no approved
@@ -12,10 +15,10 @@ official release.
 
 ## Requirements
 
-- macOS 14 or later
-- Swift 6 through Xcode or the Xcode Command Line Tools
-- gitleaks for the complete `make publish-ready` history scan
-- ImageMagick only when regenerating the committed app icon
+- macOS 14 or later.
+- Swift 6 through Xcode or the Xcode Command Line Tools.
+- gitleaks for the complete `make publish-ready` history scan.
+- ImageMagick (only for app icon regeneration).
 
 ## Build and verify
 
@@ -29,9 +32,9 @@ make verify-universal  # arm64 plus x86_64 app verification
 make publish-ready     # complete public-source gate
 ```
 
-Local builds use ad-hoc signing by default. `make package-release` fails unless
-you provide a Developer ID Application identity and a notarytool keychain
-profile. See [the release guide](docs/RELEASING.md).
+Local builds use ad-hoc signing by default. If you do not provide release
+credentials, `make package-release` fails. See
+[the release guide](docs/RELEASING.md).
 
 ## How it works
 
@@ -40,10 +43,10 @@ system Dock. **Mirror** shows the system Dock applications only. **Off** shows
 custom slots only. Optional transient tiles can show running applications that
 are not otherwise present.
 
-Move the pointer to the configured screen edge, click the thin reveal tab, or
-use the menu-bar item to open the strip. Drag an application, file, or URL onto
-the strip to create a custom slot. Right-click a tile for launch, reveal,
-remove, window, and process actions.
+Move the pointer to the configured screen edge or click the thin reveal tab.
+You can also use the menu-bar item. Drag an application, file, or URL onto the
+strip to create a custom slot. Right-click a tile for launch, reveal, remove,
+window, and process actions.
 
 Configuration is stored in:
 
@@ -51,15 +54,15 @@ Configuration is stored in:
 ~/.config/nicos-slot-dock/slots.json
 ```
 
-The format is versioned and migrated on load. The app also keeps a separate
-backup when you explicitly ask it to change system Dock preferences.
+The format is versioned and migrated on load. After an explicit request, the
+app keeps a separate backup before it changes system Dock preferences.
 
 ## Permissions and system changes
 
 The basic launcher does not require Accessibility or Automation permission.
 
-- Accessibility is optional. It enables window safe-area adjustment and can
-  improve badge/window discovery when already authorized.
+- Accessibility is optional. It enables window safe-area adjustment. If macOS
+  grants access, it can also improve badge and window discovery.
 - Automation is requested only for explicit settings actions that manage
   another application's login item or change system Dock compatibility.
 - System Dock preference actions are user-confirmed and keep a restorable

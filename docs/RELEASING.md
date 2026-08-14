@@ -10,10 +10,15 @@ From a clean `main` checkout, run:
 make publish-ready
 ```
 
-The target runs unit tests, assembles and smoke-tests the app, cross-compiles a
-universal binary, verifies the complete Git history for private paths and
-personal email, runs gitleaks, checks required public files, and requires a
-clean working tree.
+The target:
+
+- runs unit tests.
+- assembles and smoke-tests the app.
+- cross-compiles a universal binary.
+- verifies Git history for private paths and personal email.
+- runs gitleaks.
+- verifies required public files.
+- requires a clean working tree.
 
 Review the exact commit and create a SemVer tag only after the source gate is
 green. Do not attach `.build` output from the default local build to a public
@@ -23,10 +28,10 @@ release.
 
 A public macOS download requires:
 
-1. a Developer ID Application identity in the signing keychain;
-2. a notarytool keychain profile containing Apple notarization credentials;
+1. a Developer ID Application identity in the signing keychain.
+2. a notarytool keychain profile containing Apple notarization credentials.
 3. visible UI, Accessibility, Automation, multi-display, second-launch, and
-   natural-soak checks on the candidate version;
+   natural-soak checks on the candidate version.
 4. a clean source-publication gate.
 
 Then run:
@@ -37,10 +42,10 @@ make package-release \
   NOTARY_PROFILE="notary-profile"
 ```
 
-The target builds arm64 and x86_64, combines them into one app, enables the
-hardened runtime and timestamp, submits a zip to Apple, waits for notarization,
-staples and validates the ticket, runs Gatekeeper assessment, and emits a final
-zip plus SHA-256 file.
+The target builds arm64 and x86_64. It combines them into one app. It enables
+the hardened runtime and timestamp. It submits a zip to Apple and waits for
+notarization. It staples and validates the ticket. It runs Gatekeeper
+assessment and emits a final zip with its SHA-256 file.
 
 Never commit certificates, private keys, App Store Connect keys, Apple account
 credentials, or the notary profile. If notarization or Gatekeeper assessment
