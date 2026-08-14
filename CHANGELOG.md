@@ -10,6 +10,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Add public contributor, security, privacy, provenance, and architecture docs.
 - Approve an identity-bound catalog logo and reviewed public portfolio manifest.
 - Pin GitHub Actions to verified upstream commit digests.
+- Expose the complete `make publish-ready` source gate through the external catalog manifest.
 
 ## 0.3.1 - 2026-08-14
 

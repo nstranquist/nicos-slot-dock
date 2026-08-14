@@ -19,12 +19,6 @@ tags:
   - oss
   - telemetry
 checks:
-  - name: test
-    command: [make, test]
-  - name: verify
-    command: [make, verify]
-  - name: universal
-    command: [make, verify-universal]
-  - name: privacy
-    command: [make, privacy-check]
+  - name: publish-ready
+    command: [make, publish-ready]
 description: Native macOS launcher strip with custom slots, system Dock composition, running-app state, optional local permissions, and no network telemetry.
