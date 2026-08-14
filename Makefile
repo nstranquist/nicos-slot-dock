@@ -10,14 +10,15 @@ APP_DIR := .build/app/$(APP_NAME).app
 UNIVERSAL_ROOT := .build/universal
 UNIVERSAL_BINARY := $(UNIVERSAL_ROOT)/$(EXECUTABLE)
 UNIVERSAL_APP := $(UNIVERSAL_ROOT)/$(APP_NAME).app
-APP_VERSION ?= 0.3.2
-BUILD_NUMBER ?= 6
+APP_VERSION ?= 0.3.3
+BUILD_NUMBER ?= 7
 INSTALL_DIR := /Applications
 INSTALLED_APP := $(INSTALL_DIR)/$(APP_NAME).app
 BUNDLE_ID := com.nstranquist.nicos-slot-dock
 CODE_SIGN_IDENTITY ?= -
 CODE_SIGN_OPTIONS ?=
-CODE_SIGN_FLAGS = --force --sign "$(CODE_SIGN_IDENTITY)" $(CODE_SIGN_OPTIONS)
+ENTITLEMENTS ?= Resources/SlotDock.entitlements
+CODE_SIGN_FLAGS = --force --sign "$(CODE_SIGN_IDENTITY)" --entitlements "$(ENTITLEMENTS)" $(CODE_SIGN_OPTIONS)
 NOTARY_PROFILE ?=
 ICONSET_DIR := .build/AppIcon.iconset
 ICON_BASE := .build/AppIcon-1024.png
@@ -31,6 +32,8 @@ bundle:
 	@test -n "$(BINARY_PATH)" || (echo "BINARY_PATH is required" >&2; exit 2)
 	@test -n "$(OUTPUT_APP)" || (echo "OUTPUT_APP is required" >&2; exit 2)
 	@test -x "$(BINARY_PATH)" || (echo "missing binary: $(BINARY_PATH)" >&2; exit 2)
+	@test -f "$(ENTITLEMENTS)" || (echo "missing entitlements: $(ENTITLEMENTS)" >&2; exit 2)
+	@plutil -lint "$(ENTITLEMENTS)" >/dev/null
 	@mkdir -p "$(OUTPUT_APP)/Contents/MacOS" "$(OUTPUT_APP)/Contents/Resources"
 	@cp "$(BINARY_PATH)" "$(OUTPUT_APP)/Contents/MacOS/$(EXECUTABLE)"
 	@cp Resources/Info.plist "$(OUTPUT_APP)/Contents/Info.plist"
@@ -39,6 +42,11 @@ bundle:
 	@/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $(BUILD_NUMBER)" "$(OUTPUT_APP)/Contents/Info.plist"
 	@plutil -lint "$(OUTPUT_APP)/Contents/Info.plist" >/dev/null
 	@codesign $(CODE_SIGN_FLAGS) --deep "$(OUTPUT_APP)"
+	@signed_entitlements="$$(mktemp -t nicos-slot-dock-entitlements.XXXXXX)"; \
+		trap 'rm "$$signed_entitlements"' EXIT; \
+		codesign -d --entitlements "$$signed_entitlements" --xml "$(OUTPUT_APP)" >/dev/null 2>&1; \
+		entitlement="$$('/usr/libexec/PlistBuddy' -c 'Print :com.apple.security.automation.apple-events' "$$signed_entitlements")"; \
+		[[ "$$entitlement" == "true" ]] || (echo "signed app is missing the Apple Events Automation entitlement" >&2; exit 1)
 	@echo "  Signed: $(CODE_SIGN_IDENTITY)"
 	@echo "  Built: $(OUTPUT_APP)"
 	@echo "  Executable: $(OUTPUT_APP)/Contents/MacOS/$(EXECUTABLE)"
@@ -121,7 +129,7 @@ secrets-check:
 
 source-release-check:
 	@git diff --check
-	@for required in LICENSE README.md CHANGELOG.md CONTRIBUTING.md SECURITY.md PRIVACY.md CODE_OF_CONDUCT.md docs/ARCHITECTURE.md docs/PROVENANCE.md docs/RELEASING.md .nicos/product.yaml portfolio/manifest.yaml .github/workflows/ci.yml Resources/AppIcon.icns; do test -f "$$required" || (echo "missing required public file: $$required" >&2; exit 1); done
+	@for required in LICENSE README.md CHANGELOG.md CONTRIBUTING.md SECURITY.md PRIVACY.md CODE_OF_CONDUCT.md docs/ARCHITECTURE.md docs/PROVENANCE.md docs/RELEASING.md .nicos/product.yaml portfolio/manifest.yaml .github/workflows/ci.yml Resources/AppIcon.icns Resources/SlotDock.entitlements; do test -f "$$required" || (echo "missing required public file: $$required" >&2; exit 1); done
 	@test -z "$$(git ls-files .build)" || (echo "build output is tracked" >&2; exit 1)
 	@test -z "$$(git status --porcelain)" || (echo "working tree is not clean" >&2; git status --short >&2; exit 1)
 	@echo "  source release check ok"

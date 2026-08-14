@@ -30,7 +30,7 @@ After the GitHub repository exists:
 2. Enable **Private vulnerability reporting**.
 3. Confirm the repository security page exposes a private report form.
 4. Confirm the public issue templates do not ask for vulnerability details.
-5. Create `v0.3.2` only after the pushed commit passes the source gate.
+5. Create `v0.3.3` only after the pushed commit passes the source gate.
 
 The canonical source identity is **Nicos Slot Dock** in the
 `nicos-slot-dock` repository. Complete a trademark clearance before commercial
@@ -55,9 +55,11 @@ make package-release \
 ```
 
 The target builds arm64 and x86_64. It combines them into one app. It enables
-the hardened runtime and timestamp. It submits a zip to Apple and waits for
-notarization. It staples and validates the ticket. It runs Gatekeeper
-assessment and emits a final zip with its SHA-256 file.
+the hardened runtime and timestamp. It signs the app with the Apple Events
+Automation entitlement. The build stops if the signature omits that
+entitlement. The target submits a zip to Apple and waits for notarization. It
+staples and validates the ticket. It runs Gatekeeper assessment. Then it emits
+a final zip and its SHA-256 file.
 
 Never commit certificates, private keys, App Store Connect keys, Apple account
 credentials, or the notary profile. If notarization or Gatekeeper assessment

@@ -4,6 +4,15 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## 0.3.3 - 2026-08-14
+
+- Sign each app bundle with the Apple Events Automation entitlement.
+- Stop the build if the signed app does not contain the required entitlement.
+- Include the entitlement file in the source-publication gate.
+
+This version is the current public-source tag candidate. It has not been tagged
+or published.
+
 ## 0.3.2 - 2026-08-14
 
 - Roll back in-memory slot reordering when the atomic configuration write fails.
@@ -18,8 +27,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Expose the complete `make publish-ready` source gate through the external catalog manifest.
 - Give the complete gate enough time for a cold Swift and universal build.
 
-This version is the first public-source tag candidate. It has not been tagged or
-published.
+This version was an untagged public-source candidate.
 
 ## 0.3.1 - 2026-08-14
 
