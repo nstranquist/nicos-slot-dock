@@ -8,6 +8,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Adopt Nicos Slot Dock as the canonical public product name.
 - Add universal-build, privacy, secret, CI, and notarized-release gates.
 - Add public contributor, security, privacy, provenance, and architecture docs.
+- Approve an identity-bound catalog logo and reviewed public portfolio manifest.
 
 ## 0.3.1 - 2026-08-14
 

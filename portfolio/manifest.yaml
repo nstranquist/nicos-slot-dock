@@ -1,15 +1,16 @@
 schema_version: 1
 product_id: product.nicos-slot-dock
 visibility: public
-reviewed: false
+reviewed: true
 assets:
-  - path: assets/nicos-slot-dock.svg
-    kind: logo
-    alt: Nicos Slot Dock icon with three launcher tiles on a glowing dock strip
-    provenance: authored-svg
-    copyright_owner: Nico Stranquist
-    generator: project-svg-v1
-    concept: launcher-slots
+    - path: assets/brand/nicos-slot-dock.svg
+      kind: logo
+      alt: Nicos Slot Dock application icon
+      provenance: authored-svg
+      copyright_owner: Nico Stranquist
+      generator: catalog-brand-svg/v2
+      concept: catalog-grid
+      score: 100
 case_study:
-  enabled: false
-  evidence: []
+    enabled: false
+    evidence: []
