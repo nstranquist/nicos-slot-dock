@@ -4,6 +4,11 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## 0.3.2 - 2026-08-14
+
+- Roll back in-memory slot reordering when the atomic configuration write fails.
+- Scan test history for private paths while allowing only named synthetic homes.
+- Document the GitHub private-reporting setup and safe fallback procedure.
 - Prepare the privacy-filtered standalone MIT repository.
 - Adopt Nicos Slot Dock as the canonical public product name.
 - Add universal-build, privacy, secret, CI, and notarized-release gates.
@@ -12,6 +17,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Pin GitHub Actions to verified upstream commit digests.
 - Expose the complete `make publish-ready` source gate through the external catalog manifest.
 - Give the complete gate enough time for a cold Swift and universal build.
+
+This version is the first public-source tag candidate. It has not been tagged or
+published.
 
 ## 0.3.1 - 2026-08-14
 

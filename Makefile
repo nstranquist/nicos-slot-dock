@@ -10,8 +10,8 @@ APP_DIR := .build/app/$(APP_NAME).app
 UNIVERSAL_ROOT := .build/universal
 UNIVERSAL_BINARY := $(UNIVERSAL_ROOT)/$(EXECUTABLE)
 UNIVERSAL_APP := $(UNIVERSAL_ROOT)/$(APP_NAME).app
-APP_VERSION ?= 0.3.1
-BUILD_NUMBER ?= 5
+APP_VERSION ?= 0.3.2
+BUILD_NUMBER ?= 6
 INSTALL_DIR := /Applications
 INSTALLED_APP := $(INSTALL_DIR)/$(APP_NAME).app
 BUNDLE_ID := com.nstranquist.nicos-slot-dock
@@ -105,9 +105,11 @@ verify-universal: universal
 	@codesign --verify --deep --strict "$(UNIVERSAL_APP)"
 
 privacy-check:
-	@set -euo pipefail; bad=0; user_root='/Users'; file_pattern="($$user_root/[^/]+/|@(gmail|icloud)[.]com|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY)"; \
+	@set -euo pipefail; bad=0; user_root='/Users'; file_pattern="($$user_root/[^/]+/|@(gmail|icloud)[.]com|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY)"; synthetic_home_pattern="$$user_root/(example|me|test)/"; \
 		for revision in $$(git rev-list --all); do \
-			if git grep -I -n -E "$$file_pattern" "$$revision" -- . ':(exclude)Tests/**'; then bad=1; fi; \
+			if git grep -I -n -E "$$file_pattern" "$$revision" -- . \
+				| sed -E "s#$$synthetic_home_pattern#/synthetic-home/#g" \
+				| grep -E "$$file_pattern"; then bad=1; fi; \
 		done; \
 		if git log --all --format='%ae%n%ce' | grep -Eiq '(@gmail[.]com|@icloud[.]com)'; then echo "personal commit email found" >&2; bad=1; fi; \
 		(( bad == 0 )); \

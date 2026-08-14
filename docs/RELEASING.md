@@ -24,6 +24,18 @@ Review the exact commit and create a SemVer tag only after the source gate is
 green. Do not attach `.build` output from the default local build to a public
 release.
 
+After the GitHub repository exists:
+
+1. Open **Settings → Security → Code security**.
+2. Enable **Private vulnerability reporting**.
+3. Confirm the repository security page exposes a private report form.
+4. Confirm the public issue templates do not ask for vulnerability details.
+5. Create `v0.3.2` only after the pushed commit passes the source gate.
+
+The canonical source identity is **Nicos Slot Dock** in the
+`nicos-slot-dock` repository. Complete a trademark clearance before commercial
+promotion if the owner decides that the market risk warrants it.
+
 ## Binary release
 
 A public macOS download requires:

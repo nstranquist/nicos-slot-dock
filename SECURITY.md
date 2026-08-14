@@ -10,6 +10,10 @@ not published a supported binary release yet.
 Use the repository's private GitHub security-advisory form. Do not include
 credentials, private configuration, or exploit details in a public issue.
 
+If private reporting is unavailable, open a minimal public issue that asks the
+maintainer to enable a private reporting channel. Do not include vulnerability
+details in that issue.
+
 Include this information:
 
 - the affected commit or version.

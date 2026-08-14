@@ -29,6 +29,7 @@ public final class SlotStore {
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
     private let fileManager: FileManager
+    private let writeDocument: (Data) throws -> Void
     private var readOnlyError: SlotStoreError?
 
     private struct LoadResult {
@@ -37,9 +38,16 @@ public final class SlotStore {
         var readOnly: Bool
     }
 
-    public init(fileURL: URL, fileManager: FileManager = .default) {
+    public convenience init(fileURL: URL, fileManager: FileManager = .default) {
+        self.init(fileURL: fileURL, fileManager: fileManager) { data in
+            try Self.writeAtomically(data, to: fileURL, fileManager: fileManager)
+        }
+    }
+
+    init(fileURL: URL, fileManager: FileManager, writeDocument: @escaping (Data) throws -> Void) {
         self.fileURL = fileURL
         self.fileManager = fileManager
+        self.writeDocument = writeDocument
         self.encoder = JSONEncoder()
         self.encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         self.decoder = JSONDecoder()
@@ -186,6 +194,7 @@ public final class SlotStore {
         guard ordered.indices.contains(fromIndex) else { return ordered }
         let clamped = min(max(toIndex, 0), ordered.count - 1)
         guard fromIndex != clamped else { return ordered }
+        let previous = document
         let item = ordered.remove(at: fromIndex)
         ordered.insert(item, at: clamped)
         for (i, slot) in ordered.enumerated() {
@@ -193,7 +202,6 @@ public final class SlotStore {
                 document.slots[idx].sortOrder = i
             }
         }
-        let previous = document
         if !save() { document = previous }
         return slots
     }
@@ -239,30 +247,9 @@ public final class SlotStore {
             lastError = readOnlyError ?? .futureVersion(document.version)
             return false
         }
-        var tempURL: URL?
-        defer {
-            if let tempURL, fileManager.fileExists(atPath: tempURL.path) {
-                _ = try? fileManager.removeItem(at: tempURL)
-            }
-        }
         do {
-            let dir = fileURL.deletingLastPathComponent()
-            try fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
-            try fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
             let data = try encoder.encode(document)
-            let nextTempURL = dir.appendingPathComponent(".\(fileURL.lastPathComponent).tmp-\(UUID().uuidString)")
-            tempURL = nextTempURL
-            try data.write(to: nextTempURL, options: .atomic)
-            try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: nextTempURL.path)
-            if fileManager.fileExists(atPath: fileURL.path) {
-                _ = try fileManager.replaceItemAt(
-                    fileURL,
-                    withItemAt: nextTempURL,
-                    backupItemName: "\(fileURL.lastPathComponent).bak"
-                )
-            } else {
-                try fileManager.moveItem(at: nextTempURL, to: fileURL)
-            }
+            try writeDocument(data)
             lastError = nil
             return true
         } catch {
@@ -285,6 +272,29 @@ public final class SlotStore {
     }
 
     // MARK: - Private
+
+    private static func writeAtomically(_ data: Data, to fileURL: URL, fileManager: FileManager) throws {
+        let dir = fileURL.deletingLastPathComponent()
+        try fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
+        try fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
+        let tempURL = dir.appendingPathComponent(".\(fileURL.lastPathComponent).tmp-\(UUID().uuidString)")
+        defer {
+            if fileManager.fileExists(atPath: tempURL.path) {
+                _ = try? fileManager.removeItem(at: tempURL)
+            }
+        }
+        try data.write(to: tempURL, options: .atomic)
+        try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: tempURL.path)
+        if fileManager.fileExists(atPath: fileURL.path) {
+            _ = try fileManager.replaceItemAt(
+                fileURL,
+                withItemAt: tempURL,
+                backupItemName: "\(fileURL.lastPathComponent).bak"
+            )
+        } else {
+            try fileManager.moveItem(at: tempURL, to: fileURL)
+        }
+    }
 
     private func normalizeOrder() {
         let ordered = document.slots.sorted { $0.sortOrder < $1.sortOrder }

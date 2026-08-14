@@ -13,4 +13,6 @@ Participants must:
 Maintainers may edit, hide, or remove content and may temporarily or
 permanently restrict participation when conduct harms the community. Report
 conduct concerns through a private repository security advisory so the report
-does not expose the affected person publicly.
+does not expose the affected person publicly. If private reporting is not
+available, open a minimal issue that asks for a private reporting channel and
+does not identify the affected person.

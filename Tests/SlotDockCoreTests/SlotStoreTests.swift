@@ -4,6 +4,10 @@ import Testing
 
 @Suite("SlotStore")
 struct SlotStoreTests {
+    private enum ExpectedWriteFailure: Error {
+        case writeFailed
+    }
+
     private func tempURL(_ name: String = "slots.json") -> URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("slot-dock-tests-\(UUID().uuidString)", isDirectory: true)
@@ -72,6 +76,35 @@ struct SlotStoreTests {
 
         let back = store.reorder(from: 2, to: 0)
         #expect(back.map(\.id) == ["a", "b", "c"])
+    }
+
+    @Test("reorder rolls back when persistence fails")
+    func reorderRollsBackAfterWriteFailure() throws {
+        let url = tempURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        var rejectWrites = false
+        let store = SlotStore(fileURL: url, fileManager: .default) { data in
+            if rejectWrites {
+                throw ExpectedWriteFailure.writeFailed
+            }
+            try data.write(to: url, options: .atomic)
+        }
+        _ = store.add(label: "A", target: "/a", id: "a")
+        _ = store.add(label: "B", target: "/b", id: "b")
+        _ = store.add(label: "C", target: "/c", id: "c")
+        let persistedBefore = try Data(contentsOf: url)
+
+        rejectWrites = true
+        let after = store.reorder(from: 0, to: 2)
+
+        #expect(after.map(\.id) == ["a", "b", "c"])
+        #expect(after.map(\.sortOrder) == [0, 1, 2])
+        #expect(try Data(contentsOf: url) == persistedBefore)
+        #expect({
+            if case .writeFailed = store.lastError { return true }
+            return false
+        }())
     }
 
     @Test("persistence round-trip write then read same slots")
