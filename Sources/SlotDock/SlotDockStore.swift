@@ -475,7 +475,11 @@ final class SlotDockStore: ObservableObject {
     // MARK: - Context menu actions
 
     @discardableResult
-    func performContextAction(_ action: SlotContextAction, slotID: String?) -> Bool {
+    func performContextAction(
+        _ action: SlotContextAction,
+        slotID: String?,
+        instance: SlotInstanceRef? = nil
+    ) -> Bool {
         switch action {
         case .open:
             guard let slotID else { return false }
@@ -570,6 +574,12 @@ final class SlotDockStore: ObservableObject {
         case .disableOpenAtLogin:
             guard let slotID else { return false }
             return setOpenAtLogin(slotID: slotID, enabled: false)
+        case .activateInstance:
+            return activateInstance(instance)
+        case .hideInstance:
+            return hideInstance(instance)
+        case .quitInstance:
+            return quitInstance(instance)
         }
     }
 
@@ -709,6 +719,62 @@ final class SlotDockStore: ObservableObject {
             }
         }
         return true
+    }
+
+    func runningInstances(for slotID: String) -> [SlotInstanceRef] {
+        let apps = runningApplications(for: slotID)
+        var rows: [SlotInstanceRef] = []
+        for app in apps {
+            let windows = DockAXWindowTitles.windows(for: app)
+            if windows.isEmpty {
+                let name = app.localizedName ?? "PID \(app.processIdentifier)"
+                rows.append(
+                    SlotInstanceRef(processID: app.processIdentifier, title: name)
+                )
+            } else {
+                for window in windows {
+                    rows.append(
+                        SlotInstanceRef(
+                            processID: app.processIdentifier,
+                            windowNumber: window.windowNumber,
+                            title: window.title
+                        )
+                    )
+                }
+            }
+        }
+        return rows
+    }
+
+    @discardableResult
+    func activateInstance(_ instance: SlotInstanceRef?) -> Bool {
+        guard let instance, let app = NSRunningApplication(processIdentifier: instance.processID) else {
+            return false
+        }
+        app.unhide()
+        let activated = app.activate(options: [.activateAllWindows])
+        let raised = DockAXWindowTitles.raise(
+            app: app,
+            windowNumber: instance.windowNumber,
+            title: instance.title
+        )
+        return activated || raised
+    }
+
+    @discardableResult
+    func hideInstance(_ instance: SlotInstanceRef?) -> Bool {
+        guard let instance, let app = NSRunningApplication(processIdentifier: instance.processID) else {
+            return false
+        }
+        return app.hide()
+    }
+
+    @discardableResult
+    func quitInstance(_ instance: SlotInstanceRef?) -> Bool {
+        guard let instance, let app = NSRunningApplication(processIdentifier: instance.processID) else {
+            return false
+        }
+        return app.terminate()
     }
 
     func runningApplications(for slotID: String) -> [NSRunningApplication] {

@@ -59,6 +59,7 @@ struct DockView: View {
                             controlDivider
                                 .opacity(0.55 * contentOpacity)
                         }
+                        let mark = runningApps.presentation(for: item.slot)
                         SlotIconButton(
                             store: store,
                             item: item,
@@ -67,7 +68,8 @@ struct DockView: View {
                             showTooltip: store.preferences.showIconTooltips,
                             isFlashing: store.launchFlashSlotID == item.slot.id,
                             // Dot visibility can be off; right-click still needs true running state.
-                            isRunning: runningApps.isRunning(slot: item.slot),
+                            isRunning: mark.isRunning,
+                            instanceCount: mark.instanceCount,
                             showRunningDot: store.preferences.showRunningDots,
                             badge: store.preferences.showNotificationBadges
                                 ? badges.badge(for: item.slot)
@@ -345,6 +347,7 @@ struct SlotIconButton: View {
     var showTooltip: Bool = true
     var isFlashing: Bool = false
     var isRunning: Bool = false
+    var instanceCount: Int = 0
     var showRunningDot: Bool = true
     var badge: DockBadge?
     var liveIconToken: String = ""
@@ -419,11 +422,26 @@ struct SlotIconButton: View {
             .animation(.spring(response: 0.26, dampingFraction: 0.68), value: hovered)
             .animation(.spring(response: 0.18, dampingFraction: 0.55), value: isFlashing)
 
-            Circle()
-                .fill(Color.primary.opacity(showRunningDot && isRunning ? 0.75 : 0))
-                .frame(width: 4, height: 4)
-                .padding(.top, 1)
-                .allowsHitTesting(false)
+            HStack(spacing: -1) {
+                Circle()
+                    .fill(Color.primary.opacity(showRunningDot && isRunning ? 0.75 : 0))
+                    .frame(width: 4, height: 4)
+                if showRunningDot, instanceCount > 1 {
+                    Circle()
+                        .fill(Color.primary.opacity(0.55))
+                        .frame(width: 4, height: 4)
+                }
+            }
+            .overlay(alignment: .trailing) {
+                if showRunningDot, instanceCount > 2 {
+                    Text("\(instanceCount)")
+                        .font(.system(size: 6, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .offset(x: 7, y: 0)
+                }
+            }
+            .padding(.top, 1)
+            .allowsHitTesting(false)
 
             if showLabel {
                 Text(slot.label)
@@ -456,7 +474,9 @@ struct SlotIconButton: View {
         if let badge {
             parts.append(DockBadgeFormatting.accessibilityText(badge))
         }
-        if isRunning { parts.append("running") }
+        if isRunning {
+            parts.append(instanceCount > 1 ? "\(instanceCount) running" : "running")
+        }
         return parts.joined(separator: ", ")
     }
 
@@ -490,11 +510,12 @@ struct SlotIconButton: View {
                 customIndex: customIndex,
                 customCount: customCount,
                 openAtLoginEligible: loginEligible,
-                openAtLoginEnabled: loginEnabled
+                openAtLoginEnabled: loginEnabled,
+                instances: store.runningInstances(for: slot.id)
             )
         )
-        NativeContextMenu.popUp(model: model, with: event, for: view) { action in
-            _ = store.performContextAction(action, slotID: slot.id)
+        NativeContextMenu.popUp(model: model, with: event, for: view) { action, instance in
+            _ = store.performContextAction(action, slotID: slot.id, instance: instance)
         }
     }
 }

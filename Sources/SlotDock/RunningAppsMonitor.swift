@@ -118,11 +118,14 @@ final class RunningAppsMonitor: ObservableObject {
         RunningIndicator.shouldShowDot(for: slot, running: snapshot)
     }
 
+    func presentation(for slot: Slot) -> RunningPresentation {
+        RunningIndicator.presentation(for: slot, running: snapshot)
+    }
+
     private func buildSnapshot() -> RunningAppSnapshot {
         var bundles = Set<String>()
         var paths = Set<String>()
-        var apps: [RunningAppInfo] = []
-        var seenIDs = Set<String>()
+        var collected: [RunningAppInfo] = []
 
         for app in NSWorkspace.shared.runningApplications {
             // Only apps that participate in the Dock / user-facing UI.
@@ -145,12 +148,17 @@ final class RunningAppsMonitor: ObservableObject {
 
             // Only .app bundles as transient strip icons (not helpers without a path).
             guard path.lowercased().hasSuffix(".app"), !path.isEmpty else { continue }
-            let info = RunningAppInfo(bundleIdentifier: bundle, path: path, name: name)
-            guard !seenIDs.contains(info.id) else { continue }
-            seenIDs.insert(info.id)
-            apps.append(info)
+            collected.append(
+                RunningAppInfo(
+                    bundleIdentifier: bundle,
+                    path: path,
+                    name: name,
+                    processIDs: [app.processIdentifier]
+                )
+            )
         }
 
+        var apps = RunningAppGrouping.group(collected)
         // Stable order: by name then path (avoid jitter on every rebuild).
         apps.sort {
             let n = $0.name.localizedCaseInsensitiveCompare($1.name)

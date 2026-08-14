@@ -496,8 +496,8 @@ final class DockWindowController: NSObject {
             isRevealed: store.reveal.isRevealed,
             systemDockCount: store.systemDockEntries.count
         )
-        NativeContextMenu.popUp(model: model, with: event, for: content) { [weak self] action in
-            _ = self?.store.performContextAction(action, slotID: nil)
+        NativeContextMenu.popUp(model: model, with: event, for: content) { [weak self] action, instance in
+            _ = self?.store.performContextAction(action, slotID: nil, instance: instance)
             if action == .hideStrip || action == .showStrip || action == .pinOpen || action == .unpinOpen {
                 self?.requestRevealSync()
             }

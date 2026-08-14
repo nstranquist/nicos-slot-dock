@@ -11,7 +11,7 @@ enum NativeContextMenu {
         model: SlotContextMenuModel,
         with event: NSEvent,
         for view: NSView,
-        onAction: @escaping (SlotContextAction) -> Void
+        onAction: @escaping (SlotContextAction, SlotInstanceRef?) -> Void
     ) {
         let menu = makeMenu(model: model, onAction: onAction)
         NSMenu.popUpContextMenu(menu, with: event, for: view)
@@ -19,7 +19,7 @@ enum NativeContextMenu {
 
     static func makeMenu(
         model: SlotContextMenuModel,
-        onAction: @escaping (SlotContextAction) -> Void
+        onAction: @escaping (SlotContextAction, SlotInstanceRef?) -> Void
     ) -> NSMenu {
         let menu = NSMenu(title: model.title)
         menu.autoenablesItems = false
@@ -32,7 +32,7 @@ enum NativeContextMenu {
     private static func append(
         _ item: SlotContextMenuItem,
         to menu: NSMenu,
-        onAction: @escaping (SlotContextAction) -> Void
+        onAction: @escaping (SlotContextAction, SlotInstanceRef?) -> Void
     ) {
         if item.isSeparator {
             menu.addItem(.separator())
@@ -63,7 +63,7 @@ enum NativeContextMenu {
             ns.state = .on
         }
         if let action = item.action {
-            let target = ActionTarget(action: action, handler: onAction)
+            let target = ActionTarget(action: action, instance: item.instance, handler: onAction)
             ns.representedObject = target
             ns.target = target
             ns.action = #selector(ActionTarget.invoke(_:))
@@ -73,16 +73,22 @@ enum NativeContextMenu {
 
     private final class ActionTarget: NSObject {
         let action: SlotContextAction
-        let handler: (SlotContextAction) -> Void
+        let instance: SlotInstanceRef?
+        let handler: (SlotContextAction, SlotInstanceRef?) -> Void
 
-        init(action: SlotContextAction, handler: @escaping (SlotContextAction) -> Void) {
+        init(
+            action: SlotContextAction,
+            instance: SlotInstanceRef?,
+            handler: @escaping (SlotContextAction, SlotInstanceRef?) -> Void
+        ) {
             self.action = action
+            self.instance = instance
             self.handler = handler
         }
 
         @objc func invoke(_ sender: Any?) {
             SlotDockTelemetry.menu.info("context action \(self.action.rawValue, privacy: .public)")
-            handler(action)
+            handler(action, instance)
         }
     }
 }

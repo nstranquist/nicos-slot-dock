@@ -28,6 +28,37 @@ struct RunningAppsTests {
         #expect(snapshot.isRunning(identity) == false)
     }
 
+    @Test("presentation counts same-path processes and ignores other-path copies")
+    func presentationIsPathPaired() {
+        let slot = Slot(
+            id: "sysdock:com.example.Editor:/Applications/Editor.app",
+            label: "Editor",
+            target: "/Applications/Editor.app"
+        )
+        let running = RunningAppSnapshot(
+            bundleIdentifiers: ["com.example.Editor"],
+            paths: ["/Applications/Editor.app", "/Volumes/Other/Editor.app"],
+            apps: [
+                RunningAppInfo(
+                    bundleIdentifier: "com.example.Editor",
+                    path: "/Applications/Editor.app",
+                    name: "Editor",
+                    processIDs: [10, 11]
+                ),
+                RunningAppInfo(
+                    bundleIdentifier: "com.example.Editor",
+                    path: "/Volumes/Other/Editor.app",
+                    name: "Editor",
+                    processIDs: [99]
+                ),
+            ]
+        )
+        let mark = RunningIndicator.presentation(for: slot, running: running)
+        #expect(mark.isRunning)
+        #expect(mark.instanceCount == 2)
+        #expect(mark.showsStackedMark)
+    }
+
     @Test("bundle matches the paired application path when copies share an id")
     func sameBundleUsesPathIdentity() {
         let slot = Slot(

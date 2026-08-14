@@ -140,6 +140,56 @@ struct SlotContextMenuTests {
         #expect(model.items.contains { $0.title.contains("4") })
     }
 
+    @Test("window raise matcher prefers number then title")
+    func windowRaiseMatcher() {
+        let candidates: [(windowNumber: Int?, title: String)] = [
+            (11, "One"),
+            (22, "Two"),
+        ]
+        #expect(SlotContextMenuBuilder.WindowRaiseMatcher.pickIndex(
+            candidates: candidates,
+            targetNumber: 22,
+            targetTitle: "One"
+        ) == 1)
+        #expect(SlotContextMenuBuilder.WindowRaiseMatcher.pickIndex(
+            candidates: candidates,
+            targetNumber: nil,
+            targetTitle: "One"
+        ) == 0)
+        #expect(SlotContextMenuBuilder.WindowRaiseMatcher.pickIndex(
+            candidates: [],
+            targetNumber: 1,
+            targetTitle: "X"
+        ) == nil)
+    }
+
+    @Test("two instance rows are distinct actionable targets")
+    func instanceRowsAreTargetable() {
+        let first = SlotInstanceRef(processID: 11, title: "Editor — 1")
+        let second = SlotInstanceRef(processID: 22, windowNumber: 7, title: "Editor — 2")
+        let model = SlotContextMenuBuilder.buildSlotMenu(
+            input: SlotContextMenuInput(
+                label: "Editor",
+                origin: .custom,
+                kind: .application,
+                isRunning: true,
+                canOpenNewInstance: true,
+                canImportAsCustom: false,
+                customIndex: 0,
+                customCount: 1,
+                instances: [first, second]
+            )
+        )
+        let activate = model.actionableItems.filter { $0.action == .activateInstance }
+        #expect(activate.count == 2)
+        #expect(activate.contains { $0.instance?.processID == 11 })
+        #expect(activate.contains { $0.instance?.processID == 22 && $0.instance?.windowNumber == 7 })
+        #expect(model.actionableItems.contains { $0.action == .hideInstance && $0.instance?.processID == 11 })
+        #expect(model.actionableItems.contains { $0.action == .quitInstance && $0.instance?.processID == 22 })
+        #expect(model.actionableItems.contains { $0.action == .hideApplication })
+        #expect(model.actionableItems.contains { $0.action == .quitApplication })
+    }
+
     @Test("canOpenNewInstance only for .app applications")
     func newInstanceGate() {
         #expect(SlotContextMenuBuilder.canOpenNewInstance(kind: .application, path: "/Apps/X.app") == true)

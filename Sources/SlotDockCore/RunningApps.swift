@@ -69,11 +69,28 @@ public struct RunningAppInfo: Equatable, Sendable, Identifiable {
     public var bundleIdentifier: String?
     public var path: String
     public var name: String
+    /// Live PIDs for this bundle+path. Empty in compact test fixtures.
+    public var processIDs: [Int32]
+    /// Used when `processIDs` is empty so two listed copies still count as 2.
+    public var listedCopies: Int
 
-    public init(bundleIdentifier: String? = nil, path: String, name: String) {
+    public var instanceCount: Int {
+        if !processIDs.isEmpty { return processIDs.count }
+        return max(1, listedCopies)
+    }
+
+    public init(
+        bundleIdentifier: String? = nil,
+        path: String,
+        name: String,
+        processIDs: [Int32] = [],
+        listedCopies: Int = 1
+    ) {
         self.bundleIdentifier = bundleIdentifier
         self.path = SystemDockEntry.canonicalIdentityPath(path)
         self.name = name
+        self.processIDs = processIDs
+        self.listedCopies = max(1, listedCopies)
     }
 
     public func asSlot(sortOrder: Int) -> Slot {
@@ -140,25 +157,65 @@ public struct RunningAppSnapshot: Equatable, Sendable {
         }
         return false
     }
+
+    public func matchingApps(_ identity: AppIdentity) -> [RunningAppInfo] {
+        apps.filter { app in
+            if let b = identity.bundleIdentifier?.lowercased(), !b.isEmpty {
+                guard app.bundleIdentifier?.lowercased() == b else { return false }
+                if let p = identity.path?.lowercased(), !p.isEmpty {
+                    return SystemDockEntry.canonicalIdentityPath(app.path).lowercased() == p
+                }
+                return true
+            }
+            if let p = identity.path?.lowercased(), !p.isEmpty {
+                return SystemDockEntry.canonicalIdentityPath(app.path).lowercased() == p
+            }
+            return false
+        }
+    }
+
+    public func instanceCount(for identity: AppIdentity) -> Int {
+        matchingApps(identity).reduce(0) { $0 + $1.instanceCount }
+    }
+}
+
+/// Merge same bundle+path rows so several PIDs become one tile with a count.
+public enum RunningAppGrouping {
+    public static func group(_ apps: [RunningAppInfo]) -> [RunningAppInfo] {
+        var order: [String] = []
+        var map: [String: RunningAppInfo] = [:]
+        for app in apps {
+            let key = app.id
+            if var existing = map[key] {
+                for pid in app.processIDs where !existing.processIDs.contains(pid) {
+                    existing.processIDs.append(pid)
+                }
+                existing.listedCopies += app.listedCopies
+                map[key] = existing
+            } else {
+                order.append(key)
+                map[key] = app
+            }
+        }
+        return order.compactMap { map[$0] }
+    }
 }
 
 /// Pure: running apps not already represented on the strip.
+/// Identity is **path**. A second copy of the same bundle from another path
+/// is an extra tile (system Dock behavior), not a collapsed duplicate.
 public enum TransientRunningApps {
     public static func extras(
         running: [RunningAppInfo],
-        stripPaths: Set<String>,
-        stripBundles: Set<String>
+        stripPaths: Set<String>
     ) -> [RunningAppInfo] {
         let paths = Set(stripPaths.map { SystemDockEntry.canonicalIdentityPath($0).lowercased() })
-        let bundles = Set(stripBundles.map { $0.lowercased() })
+        let grouped = RunningAppGrouping.group(running)
         var out: [RunningAppInfo] = []
         var seen = Set<String>()
-        for app in running {
+        for app in grouped {
             let pathKey = SystemDockEntry.canonicalIdentityPath(app.path).lowercased()
             if !pathKey.isEmpty, paths.contains(pathKey) { continue }
-            if let b = app.bundleIdentifier?.lowercased(), !b.isEmpty, bundles.contains(b) {
-                continue
-            }
             let id = app.id
             guard !seen.contains(id) else { continue }
             seen.insert(id)
@@ -166,12 +223,62 @@ public enum TransientRunningApps {
         }
         return out
     }
+
+    /// Same bundle as a strip tile, but a different path — always a distinct
+    /// tile (system Dock behavior). Independent of the unrelated-transient pref.
+    public static func otherPathCopies(
+        running: [RunningAppInfo],
+        stripPaths: Set<String>,
+        stripBundles: Set<String>
+    ) -> [RunningAppInfo] {
+        let paths = Set(stripPaths.map { SystemDockEntry.canonicalIdentityPath($0).lowercased() })
+        let bundles = Set(stripBundles.map { $0.lowercased() }.filter { !$0.isEmpty })
+        let grouped = RunningAppGrouping.group(running)
+        var out: [RunningAppInfo] = []
+        var seen = Set<String>()
+        for app in grouped {
+            let pathKey = SystemDockEntry.canonicalIdentityPath(app.path).lowercased()
+            if !pathKey.isEmpty, paths.contains(pathKey) { continue }
+            guard let bundle = app.bundleIdentifier?.lowercased(), bundles.contains(bundle) else {
+                continue
+            }
+            guard !seen.contains(app.id) else { continue }
+            seen.insert(app.id)
+            out.append(app)
+        }
+        return out
+    }
+}
+
+/// Running mark for a strip tile: boolean plus instance count for stacked dots.
+public struct RunningPresentation: Equatable, Sendable {
+    public var isRunning: Bool
+    public var instanceCount: Int
+
+    public var showsStackedMark: Bool { instanceCount > 1 }
+
+    public init(isRunning: Bool, instanceCount: Int) {
+        self.isRunning = isRunning
+        self.instanceCount = instanceCount
+    }
 }
 
 /// Pure resolver: slot → show running indicator.
 public enum RunningIndicator {
     public static func shouldShowDot(for slot: Slot, running: RunningAppSnapshot) -> Bool {
-        running.isRunning(AppIdentity.from(slot: slot))
+        presentation(for: slot, running: running).isRunning
+    }
+
+    public static func presentation(for slot: Slot, running: RunningAppSnapshot) -> RunningPresentation {
+        let identity = AppIdentity.from(slot: slot)
+        let count = running.instanceCount(for: identity)
+        if count > 0 {
+            return RunningPresentation(isRunning: true, instanceCount: count)
+        }
+        if running.isRunning(identity) {
+            return RunningPresentation(isRunning: true, instanceCount: 1)
+        }
+        return RunningPresentation(isRunning: false, instanceCount: 0)
     }
 
     public static func dotsBySlotID(slots: [Slot], running: RunningAppSnapshot) -> [String: Bool] {

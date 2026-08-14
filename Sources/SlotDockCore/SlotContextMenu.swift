@@ -28,6 +28,32 @@ public enum SlotContextAction: String, Equatable, Sendable {
     case enableOpenAtLogin
     /// Remove login-item for this `.app` target.
     case disableOpenAtLogin
+    /// Focus one live process or window of this slot.
+    case activateInstance
+    /// Hide one live process of this slot.
+    case hideInstance
+    /// Quit one live process of this slot.
+    case quitInstance
+}
+
+/// One live process or window that a slot menu can target.
+public struct SlotInstanceRef: Equatable, Sendable, Hashable, Identifiable {
+    public var processID: Int32
+    public var windowNumber: Int?
+    public var title: String
+
+    public var id: String {
+        if let windowNumber {
+            return "\(processID):\(windowNumber)"
+        }
+        return "\(processID)"
+    }
+
+    public init(processID: Int32, windowNumber: Int? = nil, title: String) {
+        self.processID = processID
+        self.windowNumber = windowNumber
+        self.title = title
+    }
 }
 
 /// One row in a context menu (pure model — no AppKit).
@@ -42,6 +68,7 @@ public struct SlotContextMenuItem: Equatable, Sendable, Identifiable {
     public var isSeparator: Bool
     public var isHeader: Bool
     public var children: [SlotContextMenuItem]
+    public var instance: SlotInstanceRef?
 
     public init(
         id: String,
@@ -52,7 +79,8 @@ public struct SlotContextMenuItem: Equatable, Sendable, Identifiable {
         isOn: Bool = false,
         isSeparator: Bool = false,
         isHeader: Bool = false,
-        children: [SlotContextMenuItem] = []
+        children: [SlotContextMenuItem] = [],
+        instance: SlotInstanceRef? = nil
     ) {
         self.id = id
         self.title = title
@@ -63,6 +91,7 @@ public struct SlotContextMenuItem: Equatable, Sendable, Identifiable {
         self.isSeparator = isSeparator
         self.isHeader = isHeader
         self.children = children
+        self.instance = instance
     }
 
     public static func separator(id: String = UUID().uuidString) -> SlotContextMenuItem {
@@ -132,6 +161,8 @@ public struct SlotContextMenuInput: Equatable, Sendable {
     public var openAtLoginEligible: Bool
     /// Current login-item state when known; `nil` → show enable entry only.
     public var openAtLoginEnabled: Bool?
+    /// Live processes / windows for this slot (targeted hide/show/quit).
+    public var instances: [SlotInstanceRef]
 
     public init(
         label: String,
@@ -144,7 +175,8 @@ public struct SlotContextMenuInput: Equatable, Sendable {
         customIndex: Int?,
         customCount: Int,
         openAtLoginEligible: Bool = false,
-        openAtLoginEnabled: Bool? = nil
+        openAtLoginEnabled: Bool? = nil,
+        instances: [SlotInstanceRef] = []
     ) {
         self.label = label
         self.origin = origin
@@ -157,6 +189,7 @@ public struct SlotContextMenuInput: Equatable, Sendable {
         self.customCount = customCount
         self.openAtLoginEligible = openAtLoginEligible
         self.openAtLoginEnabled = openAtLoginEnabled
+        self.instances = instances
     }
 }
 
@@ -314,6 +347,7 @@ public enum SlotContextMenuBuilder {
                     isDestructive: true
                 )
             )
+            items.append(contentsOf: instanceMenuItems(input.instances))
         }
 
         items.append(.separator(id: "sep-settings"))
@@ -358,9 +392,69 @@ public enum SlotContextMenuBuilder {
         return SlotContextMenuModel(title: "Slot Dock", items: items)
     }
 
+    /// Pick which live window to raise for a targeted instance row.
+    public enum WindowRaiseMatcher {
+        public static func pickIndex(
+            candidates: [(windowNumber: Int?, title: String)],
+            targetNumber: Int?,
+            targetTitle: String
+        ) -> Int? {
+            if let targetNumber, let index = candidates.firstIndex(where: { $0.windowNumber == targetNumber }) {
+                return index
+            }
+            let want = targetTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !want.isEmpty, let index = candidates.firstIndex(where: { $0.title == want }) {
+                return index
+            }
+            return candidates.isEmpty ? nil : 0
+        }
+    }
+
     /// Whether an app path supports “Open New Instance”.
     public static func canOpenNewInstance(kind: LaunchRequest.Kind, path: String) -> Bool {
         kind == .application && path.lowercased().hasSuffix(".app") && !path.isEmpty
+    }
+
+    /// One actionable row (plus Hide/Quit children) per live process or window.
+    public static func instanceMenuItems(_ instances: [SlotInstanceRef]) -> [SlotContextMenuItem] {
+        guard !instances.isEmpty else { return [] }
+        var items: [SlotContextMenuItem] = [
+            .separator(id: "sep-instances"),
+            .header(instances.count == 1 ? "Instance" : "Instances", id: "instances-header"),
+        ]
+        for instance in instances {
+            let title = instance.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            let label = title.isEmpty ? "PID \(instance.processID)" : title
+            items.append(
+                SlotContextMenuItem(
+                    id: "instance-\(instance.id)",
+                    title: label,
+                    action: .activateInstance,
+                    children: [
+                        SlotContextMenuItem(
+                            id: "show-\(instance.id)",
+                            title: "Show",
+                            action: .activateInstance,
+                            instance: instance
+                        ),
+                        SlotContextMenuItem(
+                            id: "hide-\(instance.id)",
+                            title: "Hide",
+                            action: .hideInstance,
+                            instance: instance
+                        ),
+                        SlotContextMenuItem(
+                            id: "quit-\(instance.id)",
+                            title: "Quit",
+                            action: .quitInstance,
+                            instance: instance
+                        ),
+                    ],
+                    instance: instance
+                )
+            )
+        }
+        return items
     }
 }
 

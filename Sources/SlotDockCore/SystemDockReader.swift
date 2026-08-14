@@ -299,8 +299,6 @@ public enum SlotComposer {
             }
         }
 
-        guard includeRunningExtras, !runningApps.isEmpty else { return items }
-
         var stripPaths = Set(items.map { SystemDockEntry.normalizePath($0.slot.target).lowercased() }.filter { !$0.isEmpty })
         var stripBundles = Set<String>()
         for item in items {
@@ -309,20 +307,36 @@ public enum SlotComposer {
             }
         }
 
-        let extras = TransientRunningApps.extras(
-            running: runningApps,
-            stripPaths: stripPaths,
-            stripBundles: stripBundles
-        )
         var order = items.count
-        for app in extras {
-            let s = app.asSlot(sortOrder: order)
-            order += 1
-            items.append(Item(slot: s, origin: .running))
-            if !app.path.isEmpty {
-                stripPaths.insert(app.path.lowercased())
+        let appendRunning = { (apps: [RunningAppInfo]) in
+            for app in apps {
+                let s = app.asSlot(sortOrder: order)
+                order += 1
+                items.append(Item(slot: s, origin: .running))
+                if !app.path.isEmpty {
+                    stripPaths.insert(SystemDockEntry.canonicalIdentityPath(app.path).lowercased())
+                }
             }
         }
+
+        if !runningApps.isEmpty {
+            appendRunning(
+                TransientRunningApps.otherPathCopies(
+                    running: runningApps,
+                    stripPaths: stripPaths,
+                    stripBundles: stripBundles
+                )
+            )
+        }
+
+        guard includeRunningExtras, !runningApps.isEmpty else { return items }
+
+        appendRunning(
+            TransientRunningApps.extras(
+                running: runningApps,
+                stripPaths: stripPaths
+            )
+        )
         return items
     }
 

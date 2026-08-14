@@ -286,22 +286,53 @@ enum DockAXBadges {
 }
 
 enum DockAXWindowTitles {
+    struct Window {
+        var title: String
+        var windowNumber: Int?
+        var element: AXUIElement
+    }
+
     @MainActor
     static func titles(for app: NSRunningApplication) -> [String] {
+        windows(for: app).map(\.title)
+    }
+
+    @MainActor
+    static func windows(for app: NSRunningApplication) -> [Window] {
         guard AXIsProcessTrusted(), !app.isTerminated else { return [] }
         let element = AXUIElementCreateApplication(app.processIdentifier)
         var value: AnyObject?
         let error = AXUIElementCopyAttributeValue(element, kAXWindowsAttribute as CFString, &value)
         guard error == .success, let windows = value as? [AXUIElement] else { return [] }
-        var titles: [String] = []
+        var out: [Window] = []
         for window in windows {
             var raw: AnyObject?
             guard AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &raw) == .success,
                   let title = raw as? String,
                   !title.isEmpty
             else { continue }
-            titles.append(title)
+            var number: Int?
+            var numRef: AnyObject?
+            if AXUIElementCopyAttributeValue(window, "AXWindowNumber" as CFString, &numRef) == .success {
+                number = numRef as? Int ?? (numRef as? NSNumber)?.intValue
+            }
+            out.append(Window(title: title, windowNumber: number, element: window))
         }
-        return titles
+        return out
+    }
+
+    @MainActor
+    @discardableResult
+    static func raise(app: NSRunningApplication, windowNumber: Int?, title: String) -> Bool {
+        let listed = windows(for: app)
+        let candidates = listed.map { (windowNumber: $0.windowNumber, title: $0.title) }
+        guard let index = SlotContextMenuBuilder.WindowRaiseMatcher.pickIndex(
+            candidates: candidates,
+            targetNumber: windowNumber,
+            targetTitle: title
+        ), listed.indices.contains(index)
+        else { return false }
+        let error = AXUIElementPerformAction(listed[index].element, kAXRaiseAction as CFString)
+        return error == .success
     }
 }
