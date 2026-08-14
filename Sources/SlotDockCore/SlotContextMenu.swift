@@ -193,7 +193,7 @@ public struct SlotContextMenuInput: Equatable, Sendable {
     }
 }
 
-/// Pure builder for Dock-like + Slot Dock–specific right-click menus.
+/// Pure builder for Dock-like + Nicos Slot Dock–specific right-click menus.
 public enum SlotContextMenuBuilder {
     public static func buildSlotMenu(input: SlotContextMenuInput) -> SlotContextMenuModel {
         var items: [SlotContextMenuItem] = []
@@ -234,7 +234,7 @@ public enum SlotContextMenuBuilder {
             options.append(
                 SlotContextMenuItem(
                     id: "remove",
-                    title: "Remove from Slot Dock",
+                    title: "Remove from Nicos Slot Dock",
                     action: .removeFromSlotDock,
                     isDestructive: true
                 )
@@ -389,7 +389,7 @@ public enum SlotContextMenuBuilder {
                 action: .refreshSystemDock
             )
         )
-        return SlotContextMenuModel(title: "Slot Dock", items: items)
+        return SlotContextMenuModel(title: "Nicos Slot Dock", items: items)
     }
 
     /// Pick which live window to raise for a targeted instance row.

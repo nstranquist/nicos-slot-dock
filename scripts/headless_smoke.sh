@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-APP="$ROOT/.build/release/SlotDock.app"
+APP="$ROOT/.build/app/Nicos Slot Dock.app"
 BIN="$APP/Contents/MacOS/SlotDock"
 REPORT="${SLOT_DOCK_SELFTEST_REPORT:-$ROOT/.build/selftest-report.json}"
 CONFIG="${SLOT_DOCK_CONFIG:-$ROOT/.build/smoke-config/slots.json}"

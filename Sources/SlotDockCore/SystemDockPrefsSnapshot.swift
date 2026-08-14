@@ -1,6 +1,6 @@
 import Foundation
 
-/// Snapshot of the system Dock preference keys Slot Dock may change.
+/// Snapshot of the system Dock preference keys Nicos Slot Dock may change.
 /// Pure encode/decode + script generation — no shell execution here.
 public struct SystemDockPrefsSnapshot: Codable, Equatable, Sendable {
     public var version: Int
@@ -67,7 +67,7 @@ public struct SystemDockPrefsSnapshot: Codable, Equatable, Sendable {
     public func restoreScript() -> String {
         var lines: [String] = [
             "set -euo pipefail",
-            "# Restore com.apple.dock prefs from Slot Dock snapshot",
+            "# Restore com.apple.dock prefs from Nicos Slot Dock snapshot",
             "# captured \(ISO8601DateFormatter().string(from: capturedAt))",
         ]
         if let note, !note.isEmpty {
@@ -110,7 +110,7 @@ public struct SystemDockPrefsSnapshot: Codable, Equatable, Sendable {
         return lines.joined(separator: "\n")
     }
 
-    /// Compare only the Dock keys Slot Dock owns. Capture time and note are
+    /// Compare only the Dock keys Nicos Slot Dock owns. Capture time and note are
     /// metadata, not conflict inputs.
     public func managedValuesEqual(to other: SystemDockPrefsSnapshot) -> Bool {
         autohidePresent == other.autohidePresent
@@ -195,7 +195,7 @@ public struct SystemDockPrefsSnapshot: Codable, Equatable, Sendable {
     }
 }
 
-/// Recommended Slot Dock-friendly system Dock prefs (auto-hide + 5s show delay).
+/// Recommended Nicos Slot Dock-friendly system Dock prefs (auto-hide + 5s show delay).
 public enum SystemDockRecommended {
     public static let delaySeconds: Double = 5
 

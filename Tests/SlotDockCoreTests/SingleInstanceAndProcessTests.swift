@@ -31,7 +31,10 @@ struct SingleInstanceAndProcessTests {
     @Test("process identity matches SlotDock binary paths")
     func processIdentity() {
         #expect(SlotDockProcessIdentity.matchesProcessCommand(
-            "/Users/me/dev/nicos-tools/apps/desktop/nicos-slot-dock/.build/release/SlotDock.app/Contents/MacOS/SlotDock"
+            "/Users/example/src/nicos-slot-dock/.build/app/Nicos Slot Dock.app/Contents/MacOS/SlotDock"
+        ))
+        #expect(SlotDockProcessIdentity.matchesProcessCommand(
+            "/Applications/Nicos Slot Dock.app/Contents/MacOS/SlotDock"
         ))
         #expect(SlotDockProcessIdentity.matchesProcessCommand(
             "/Applications/Slot Dock.app/Contents/MacOS/SlotDock"

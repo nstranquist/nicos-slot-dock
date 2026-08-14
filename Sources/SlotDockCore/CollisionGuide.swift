@@ -1,6 +1,6 @@
 import Foundation
 
-/// Named collisions between Slot Dock and the native macOS Dock.
+/// Named collisions between Nicos Slot Dock and the native macOS Dock.
 public struct CollisionTopic: Equatable, Sendable, Identifiable {
     public var id: String
     public var title: String
@@ -56,13 +56,13 @@ public struct CollisionGuide: Equatable, Sendable {
     public var actions: [CollisionAction]
 
     public init(
-        title: String = "Slot Dock & the system Dock",
+        title: String = "Nicos Slot Dock & the system Dock",
         summary: String = """
-        Slot Dock is an extra strip; it does not replace the macOS Dock. \
+        Nicos Slot Dock is an extra strip; it does not replace the macOS Dock. \
         “Turn Hiding On” / auto-hide only conceals the Dock until you move the pointer to the bottom edge — \
         macOS will still show it on hover. That is normal. \
-        To stop brief bottom-edge hovers from summoning the system Dock while using Slot Dock, \
-        raise the system Dock show-delay (autohide-delay) or turn off Slot Dock edge hover. \
+        To stop brief bottom-edge hovers from summoning the system Dock while using Nicos Slot Dock, \
+        raise the system Dock show-delay (autohide-delay) or turn off Nicos Slot Dock edge hover. \
         Fully removing the Dock process is unsupported. Actions below never run silently; you confirm each one.
         """,
         topics: [CollisionTopic] = CollisionGuide.defaultTopics,
@@ -80,23 +80,23 @@ public struct CollisionGuide: Equatable, Sendable {
         CollisionTopic(
             id: "hide-system-dock",
             title: "Hide / “disable” the system Dock (what auto-hide really means)",
-            slotDockSide: "Use Slot Dock as your everyday launcher strip.",
+            slotDockSide: "Use Nicos Slot Dock as your everyday launcher strip.",
             systemDockSide: """
             “Turn Hiding On” only auto-hides the Dock. Moving the pointer to the bottom of the screen \
             still peeks the macOS Dock — Apple does not offer a supported “never show Dock” switch.
             """,
             recommendation: """
             1) Keep auto-hide ON. \
-            2) Raise show-delay (autohide-delay) so a quick hover for Slot Dock does not pop the system Dock — \
+            2) Raise show-delay (autohide-delay) so a quick hover for Nicos Slot Dock does not pop the system Dock — \
             use “Raise Dock show-delay (5s)” or “Nearly never show Dock (1000s delay)” below. \
-            3) Optional: turn off Slot Dock edge hover and open the strip from the menu-bar status item / pin. \
+            3) Optional: turn off Nicos Slot Dock edge hover and open the strip from the menu-bar status item / pin. \
             4) To undo: “Reset Dock show-delay” and/or “Disable system Dock auto-hide”.
             """
         ),
         CollisionTopic(
             id: "autohide-still-on-hover",
             title: "Auto-hide still appears on bottom hover",
-            slotDockSide: "Slot Dock also uses the bottom edge for reveal when edge hover is on.",
+            slotDockSide: "Nicos Slot Dock also uses the bottom edge for reveal when edge hover is on.",
             systemDockSide: "Auto-hidden system Dock is designed to reappear when the cursor stays at the bottom edge.",
             recommendation: """
             This is expected, not a bug. Combine auto-hide + long autohide-delay, or disable one product’s edge reveal. \
@@ -106,37 +106,37 @@ public struct CollisionGuide: Equatable, Sendable {
         CollisionTopic(
             id: "bottom-strip",
             title: "Bottom edge strip",
-            slotDockSide: "Slot Dock sits above the bottom edge (reveal / pin / auto-hide).",
+            slotDockSide: "Nicos Slot Dock sits above the bottom edge (reveal / pin / auto-hide).",
             systemDockSide: "The system Dock also owns the bottom edge, icons, and magnification.",
-            recommendation: "Auto-hide the system Dock and raise show-delay, or pin Slot Dock and shrink the system Dock."
+            recommendation: "Auto-hide the system Dock and raise show-delay, or pin Nicos Slot Dock and shrink the system Dock."
         ),
         CollisionTopic(
             id: "auto-hide",
             title: "Auto-hide (two independent toggles)",
-            slotDockSide: "Slot Dock can auto-hide and reappear on edge hover or the status menu.",
+            slotDockSide: "Nicos Slot Dock can auto-hide and reappear on edge hover or the status menu.",
             systemDockSide: "System Dock auto-hide is separate (Desktop & Dock → Automatically hide and show the Dock).",
-            recommendation: "Turn system Dock auto-hide ON so windows are not covered by a permanent Dock; then set a long show-delay so hover for Slot Dock does not also pull up the system Dock."
+            recommendation: "Turn system Dock auto-hide ON so windows are not covered by a permanent Dock; then set a long show-delay so hover for Nicos Slot Dock does not also pull up the system Dock."
         ),
         CollisionTopic(
             id: "edge-hover",
             title: "Edge hover fight",
-            slotDockSide: "Edge hover reveals Slot Dock near the bottom center/left/right.",
+            slotDockSide: "Edge hover reveals Nicos Slot Dock near the bottom center/left/right.",
             systemDockSide: "The same bottom-edge gesture peeks the auto-hidden system Dock.",
-            recommendation: "Either raise system Dock show-delay, or disable Slot Dock edge hover and use the status item / pin open."
+            recommendation: "Either raise system Dock show-delay, or disable Nicos Slot Dock edge hover and use the status item / pin open."
         ),
         CollisionTopic(
             id: "app-list",
             title: "App list (merge / mirror)",
-            slotDockSide: "Merge/Mirror reads your system Dock app list into Slot Dock.",
+            slotDockSide: "Merge/Mirror reads your system Dock app list into Nicos Slot Dock.",
             systemDockSide: "The system Dock remains the source of truth for pinned apps.",
-            recommendation: "Keep Merge if you want both; use Mirror for Dock-only; Off for custom-only. Changing system Dock apps updates Slot Dock on refresh/activate."
+            recommendation: "Keep Merge if you want both; use Mirror for Dock-only; Off for custom-only. Changing system Dock apps updates Nicos Slot Dock on refresh/activate."
         ),
         CollisionTopic(
             id: "safe-area",
             title: "Window safe-area padding",
-            slotDockSide: "Optional inset lifts windows so content clears the Slot Dock strip.",
+            slotDockSide: "Optional inset lifts windows so content clears the Nicos Slot Dock strip.",
             systemDockSide: "System Dock already reserves screen space when not auto-hidden.",
-            recommendation: "Enable safe-area when Slot Dock is pinned or often expanded; disable restores only windows Slot Dock moved."
+            recommendation: "Enable safe-area when Nicos Slot Dock is pinned or often expanded; disable restores only windows Nicos Slot Dock moved."
         ),
     ]
 
@@ -150,7 +150,7 @@ public struct CollisionGuide: Equatable, Sendable {
         ),
         CollisionAction(
             id: "apply-recommended",
-            title: "Recommended for Slot Dock (snapshot + auto-hide + 5s delay)",
+            title: "Recommended for Nicos Slot Dock (snapshot + auto-hide + 5s delay)",
             detail: "One guided step: backup current Dock prefs (if none yet), enable auto-hide, set 5s show-delay, restart Dock. You confirm first.",
             kind: .defaultsCommand,
             payload: CollisionGuide.scriptRaiseDelay(seconds: 5)
@@ -158,7 +158,7 @@ public struct CollisionGuide: Equatable, Sendable {
         CollisionAction(
             id: "restore-dock-prefs",
             title: "Restore Dock prefs from snapshot",
-            detail: "Re-applies the last Slot Dock backup of autohide/delay keys and restarts Dock. Disabled if no snapshot exists.",
+            detail: "Re-applies the last Nicos Slot Dock backup of autohide/delay keys and restarts Dock. Disabled if no snapshot exists.",
             kind: .defaultsCommand,
             payload: "RESTORE_PLACEHOLDER"
         ),
@@ -176,7 +176,7 @@ public struct CollisionGuide: Equatable, Sendable {
         CollisionAction(
             id: "raise-dock-delay-5s",
             title: "2) Raise Dock show-delay (5s)",
-            detail: "Keeps auto-hide ON but waits 5s at the bottom edge before the system Dock peeks — so Slot Dock edge hover usually wins. Auto-snapshots first if no backup.",
+            detail: "Keeps auto-hide ON but waits 5s at the bottom edge before the system Dock peeks — so Nicos Slot Dock edge hover usually wins. Auto-snapshots first if no backup.",
             kind: .defaultsCommand,
             payload: CollisionGuide.scriptRaiseDelay(seconds: 5)
         ),
@@ -268,21 +268,21 @@ public struct CollisionGuide: Equatable, Sendable {
 
     /// Short copy-paste guide: auto-hide alone is not enough; need show-delay too.
     public static let hideDockShortcutGuide: String = """
-        Stop the macOS Dock fighting Slot Dock
+        Stop the macOS Dock fighting Nicos Slot Dock
         ======================================
 
         Important
         ---------
         “Turn Hiding On” / auto-hide only HIDES the Dock until you move the pointer
         to the bottom of the screen. Hovering the bottom edge STILL shows the Dock.
-        That is normal macOS behavior — not a Slot Dock bug.
+        That is normal macOS behavior — not a Nicos Slot Dock bug.
 
-        Recommended setup for Slot Dock
+        Recommended setup for Nicos Slot Dock
         --------------------------------
         1) Auto-hide the system Dock
            • Control-click the thin Dock separator → Turn Hiding On
            • or System Settings → Desktop & Dock → Automatically hide and show the Dock
-           • or Slot Dock → “1) Auto-hide system Dock”
+           • or Nicos Slot Dock → “1) Auto-hide system Dock”
 
         2) Raise the show-delay so brief hovers do not peek the Dock
            Terminal (5 second delay — good daily default):
@@ -291,17 +291,17 @@ public struct CollisionGuide: Equatable, Sendable {
              defaults write com.apple.dock autohide-time-modifier -float 0.4
              killall Dock
 
-           Or use Slot Dock buttons:
+           Or use Nicos Slot Dock buttons:
              “2) Raise Dock show-delay (5s)”
              “2b) Nearly never show system Dock (1000s delay)”
 
-        3) Optional: turn off Slot Dock “Edge hover” and open the strip from the
+        3) Optional: turn off Nicos Slot Dock “Edge hover” and open the strip from the
            menu-bar status item or Pin open — then the bottom edge is free for the
            system Dock when you really want it.
 
         Undo
         ----
-        • Slot Dock → “Reset Dock show-delay (default)”
+        • Nicos Slot Dock → “Reset Dock show-delay (default)”
         • or: defaults delete com.apple.dock autohide-delay; killall Dock
         • “Disable system Dock auto-hide” to pin the stock Dock visible again.
 
@@ -317,12 +317,12 @@ public struct CollisionGuide: Equatable, Sendable {
     /// Build guidance without touching `default` / `defaultActions` (avoids static init recursion).
     public static func buildGuidanceText(topics: [CollisionTopic]) -> String {
         let summary = """
-        Slot Dock is an extra strip; it does not replace the macOS Dock. \
+        Nicos Slot Dock is an extra strip; it does not replace the macOS Dock. \
         Auto-hide still peeks the Dock on bottom hover — raise autohide-delay to avoid that. \
         Use the actions only when you intend to change system Dock settings.
         """
         var lines: [String] = [
-            "Slot Dock ↔ system Dock compatibility",
+            "Nicos Slot Dock ↔ system Dock compatibility",
             "",
             summary,
             "",
@@ -331,7 +331,7 @@ public struct CollisionGuide: Equatable, Sendable {
         ]
         for t in topics {
             lines.append("• \(t.title)")
-            lines.append("  Slot Dock: \(t.slotDockSide)")
+            lines.append("  Nicos Slot Dock: \(t.slotDockSide)")
             lines.append("  System Dock: \(t.systemDockSide)")
             lines.append("  Try: \(t.recommendation)")
             lines.append("")
@@ -340,7 +340,7 @@ public struct CollisionGuide: Equatable, Sendable {
         return lines.joined(separator: "\n")
     }
 
-    /// Whether enabling this Slot Dock mode should surface the collision prompt.
+    /// Whether enabling this Nicos Slot Dock mode should surface the collision prompt.
     public static func shouldPrompt(for preferences: DockPreferences) -> Bool {
         // Edge strip + auto-hide or pin stacks with system bottom Dock.
         preferences.autoHide || preferences.pinOpen || preferences.edgeHover

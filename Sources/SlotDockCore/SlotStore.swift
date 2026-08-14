@@ -9,11 +9,11 @@ public enum SlotStoreError: Error, Equatable, LocalizedError, Sendable {
 
     public var errorDescription: String? {
         switch self {
-        case .readFailed(let message): return "Could not read Slot Dock configuration: \(message)"
-        case .decodeFailed(let message): return "Slot Dock configuration is invalid: \(message)"
+        case .readFailed(let message): return "Could not read Nicos Slot Dock configuration: \(message)"
+        case .decodeFailed(let message): return "Nicos Slot Dock configuration is invalid: \(message)"
         case .futureVersion(let version):
-            return "Slot Dock configuration version \(version) is newer than this app supports. It is read-only until upgraded."
-        case .writeFailed(let message): return "Could not save Slot Dock configuration: \(message)"
+            return "Nicos Slot Dock configuration version \(version) is newer than this app supports. It is read-only until upgraded."
+        case .writeFailed(let message): return "Could not save Nicos Slot Dock configuration: \(message)"
         case .invalidSlot(let message): return message
         }
     }
@@ -101,12 +101,12 @@ public final class SlotStore {
         let normalizedLabel = label.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedIcon = iconPath?.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedTarget.isEmpty else {
-            lastError = .invalidSlot("A Slot Dock target is required.")
+            lastError = .invalidSlot("A Nicos Slot Dock target is required.")
             return nil
         }
         guard canMutate() else { return nil }
         guard !document.slots.contains(where: { Self.targetKey($0.target) == Self.targetKey(normalizedTarget) }) else {
-            lastError = .invalidSlot("That target is already on the Slot Dock.")
+            lastError = .invalidSlot("That target is already on the Nicos Slot Dock.")
             return nil
         }
         let order = (document.slots.map(\.sortOrder).max() ?? -1) + 1
@@ -148,7 +148,7 @@ public final class SlotStore {
            })
         {
             document = previous
-            lastError = .invalidSlot("That target is already on the Slot Dock.")
+            lastError = .invalidSlot("That target is already on the Nicos Slot Dock.")
             return nil
         }
         if document.slots[index].label.isEmpty {
@@ -156,7 +156,7 @@ public final class SlotStore {
         }
         guard !document.slots[index].target.isEmpty else {
             document = previous
-            lastError = .invalidSlot("A Slot Dock target is required.")
+            lastError = .invalidSlot("A Nicos Slot Dock target is required.")
             return nil
         }
         guard save() else {
@@ -210,12 +210,12 @@ public final class SlotStore {
             slot.target = slot.target.trimmingCharacters(in: .whitespacesAndNewlines)
             slot.iconPath = slot.iconPath?.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !slot.target.isEmpty else {
-                lastError = .invalidSlot("A Slot Dock target is required for every slot.")
+                lastError = .invalidSlot("A Nicos Slot Dock target is required for every slot.")
                 return
             }
             let targetKey = Self.targetKey(slot.target)
             guard targets.insert(targetKey).inserted else {
-                lastError = .invalidSlot("Each Slot Dock target must be unique.")
+                lastError = .invalidSlot("Each Nicos Slot Dock target must be unique.")
                 return
             }
             if slot.label.isEmpty { slot.label = Self.fallbackLabel(for: slot.target) }

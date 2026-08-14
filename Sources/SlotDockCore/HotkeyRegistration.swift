@@ -63,7 +63,7 @@ public struct HotkeyRegistrationReport: Equatable, Sendable {
         case -9878: return "hotkey already in use by another app"
         case -50: return "invalid parameter"
         case -10001: return "key is not supported by the Carbon keyboard map"
-        case -10002: return "shortcut conflicts with another Slot Dock action"
+        case -10002: return "shortcut conflicts with another Nicos Slot Dock action"
         case -108: return "memory full"
         default: return "Carbon error \(status)"
         }

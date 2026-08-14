@@ -521,7 +521,7 @@ final class SlotDockStore: ObservableObject {
             // Reverse of Keep: remove the durable custom slot matching this strip item’s path.
             guard let slotID, let item = displayItem(for: slotID) else { return false }
             guard item.origin != .custom else {
-                // Pure custom strip row uses Remove from Slot Dock instead.
+                // Pure custom strip row uses Remove from Nicos Slot Dock instead.
                 return false
             }
             guard let customID = KeepAsCustomPolicy.customSlotID(

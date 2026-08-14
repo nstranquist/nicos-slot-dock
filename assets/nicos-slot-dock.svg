@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title description">
+  <title id="title">Nicos Slot Dock</title>
+  <desc id="description">Three launcher tiles resting on a glowing dock strip.</desc>
+  <defs>
+    <linearGradient id="background" x1="128" y1="96" x2="896" y2="928" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#172554"/>
+      <stop offset="0.48" stop-color="#312e81"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="dock" x1="176" y1="660" x2="848" y2="824" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#67e8f9" stop-opacity="0.82"/>
+      <stop offset="0.5" stop-color="#a78bfa" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#f0abfc" stop-opacity="0.8"/>
+    </linearGradient>
+    <linearGradient id="tileA" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="tileB" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#c4b5fd"/>
+      <stop offset="1" stop-color="#7c3aed"/>
+    </linearGradient>
+    <linearGradient id="tileC" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f0abfc"/>
+      <stop offset="1" stop-color="#db2777"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%">
+      <feDropShadow dx="0" dy="28" stdDeviation="28" flood-color="#020617" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+  <rect x="32" y="32" width="960" height="960" rx="224" fill="#312e81"/>
+  <path d="M152 286C262 154 434 106 604 145c123 28 218 102 278 194" fill="none" stroke="#e0f2fe" stroke-opacity="0.12" stroke-width="32" stroke-linecap="round"/>
+  <g filter="url(#shadow)">
+    <rect x="166" y="638" width="692" height="194" rx="76" fill="#0f172a" fill-opacity="0.92" stroke="#a78bfa" stroke-width="10"/>
+    <rect x="238" y="300" width="178" height="360" rx="60" fill="#0891b2"/>
+    <rect x="423" y="240" width="178" height="420" rx="60" fill="#7c3aed"/>
+    <rect x="608" y="340" width="178" height="320" rx="60" fill="#db2777"/>
+    <path d="M282 470h90M468 420h88M652 492h90" stroke="#fff" stroke-opacity="0.82" stroke-width="28" stroke-linecap="round"/>
+    <circle cx="327" cy="754" r="15" fill="#67e8f9"/>
+    <circle cx="512" cy="754" r="15" fill="#c4b5fd"/>
+    <circle cx="697" cy="754" r="15" fill="#f0abfc"/>
+  </g>
+</svg>

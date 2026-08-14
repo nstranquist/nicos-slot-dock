@@ -19,7 +19,7 @@ enum TargetAppLoginItem {
             case .notEligible:
                 return "Only application targets support Open at Login."
             case .automationDenied:
-                return "Allow Slot Dock to control System Events (System Settings → Privacy & Security → Automation), then try again."
+                return "Allow Nicos Slot Dock to control System Events (System Settings → Privacy & Security → Automation), then try again."
             case .scriptFailed(let s):
                 return s
             case .pathMissing:

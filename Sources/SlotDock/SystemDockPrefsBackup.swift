@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 import SlotDockCore
 
-/// Live capture / restore of system Dock prefs Slot Dock may change.
+/// Live capture / restore of system Dock prefs Nicos Slot Dock may change.
 /// Always user-triggered; auto-snapshot before first mutative helper in a session path.
 @MainActor
 enum SystemDockPrefsBackup {

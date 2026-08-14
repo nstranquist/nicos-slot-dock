@@ -131,7 +131,7 @@ struct SlotStoreTests {
         #expect(store.slots.count == 2)
         #expect(duplicate?.id != "same")
         #expect(invalid == nil)
-        #expect(store.lastError == .invalidSlot("A Slot Dock target is required."))
+        #expect(store.lastError == .invalidSlot("A Nicos Slot Dock target is required."))
     }
 
     @Test("duplicate targets are rejected for paths and URLs")

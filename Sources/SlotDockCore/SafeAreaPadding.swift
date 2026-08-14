@@ -34,7 +34,7 @@ public struct CGSize: Equatable, Sendable {
 public struct ScreenBottomBand: Equatable, Sendable {
     /// Visible frame of the screen (already excludes menu bar / system Dock when possible).
     public var visibleFrame: CGRect
-    /// Height of the Slot Dock strip region that needs clearance (points).
+    /// Height of the Nicos Slot Dock strip region that needs clearance (points).
     public var padHeight: CGFloat
     /// Extra gap above the strip.
     public var extraGap: CGFloat
@@ -69,7 +69,7 @@ public struct WindowFrameSnapshot: Equatable, Sendable, Identifiable {
 public struct PadRecord: Equatable, Sendable, Identifiable {
     public var id: String { windowID }
     public var windowID: String
-    /// Frame before any Slot Dock pad (restore target).
+    /// Frame before any Nicos Slot Dock pad (restore target).
     public var originalFrame: CGRect
     /// Last applied frame after pad.
     public var paddedFrame: CGRect
@@ -186,7 +186,7 @@ public enum SafeAreaPlanner {
     /// Build apply/restore plan.
     /// - Parameters:
     ///   - need: whether padding should be active now.
-    ///   - windows: current on-screen windows (caller filters Slot Dock itself).
+    ///   - windows: current on-screen windows (caller filters Nicos Slot Dock itself).
     ///   - band: strip geometry.
     ///   - ledger: prior pad records.
     public static func plan(

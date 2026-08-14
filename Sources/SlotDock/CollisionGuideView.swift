@@ -2,7 +2,7 @@ import AppKit
 import SlotDockCore
 import SwiftUI
 
-/// In-settings compatibility guide for Slot Dock vs system Dock.
+/// In-settings compatibility guide for Nicos Slot Dock vs system Dock.
 struct CollisionGuideView: View {
     @ObservedObject var store: SlotDockStore
     @State private var statusMessage: String?
@@ -43,7 +43,7 @@ struct CollisionGuideView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(topic.title)
                         .font(.system(size: 12, weight: .semibold))
-                    Text("Slot Dock: \(topic.slotDockSide)")
+                    Text("Nicos Slot Dock: \(topic.slotDockSide)")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                     Text("System Dock: \(topic.systemDockSide)")
@@ -281,7 +281,7 @@ struct CollisionGuideView: View {
         alert.messageText = title
         alert.informativeText = """
         \(preamble)This runs the following in a shell and restarts the Dock (killall Dock). \
-        Slot Dock never does this without your OK.
+        Nicos Slot Dock never does this without your OK.
 
         \(ensureSnapshotNote != nil ? "A snapshot of current Dock prefs will be saved first if none exists.\n\n" : "")Commands:
         \(script)
@@ -340,9 +340,9 @@ enum CollisionGuidePrompt {
         guard CollisionGuide.shouldPrompt(for: store.preferences) else { return }
 
         let alert = NSAlert()
-        alert.messageText = "Slot Dock and the system Dock"
+        alert.messageText = "Nicos Slot Dock and the system Dock"
         alert.informativeText = """
-        Slot Dock adds a bottom strip that can stack with the macOS Dock.
+        Nicos Slot Dock adds a bottom strip that can stack with the macOS Dock.
 
         “Turn Hiding On” only auto-hides the stock Dock — moving to the bottom of the screen still peeks it. \
         That is normal. To stop brief hovers from summoning it, raise the Dock show-delay (Settings → Options → System Dock compatibility). \

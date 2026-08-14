@@ -271,10 +271,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // Distinct from document icons; template so it matches system bar.
             button.image = NSImage(
                 systemSymbolName: "rectangle.stack.fill",
-                accessibilityDescription: "Slot Dock"
+                accessibilityDescription: "Nicos Slot Dock"
             )
             button.image?.isTemplate = true
-            button.toolTip = "Slot Dock"
+            button.toolTip = "Nicos Slot Dock"
         }
         let menu = NSMenu()
         menu.delegate = self
@@ -441,7 +441,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         addBoundItem(menu, title: "Edit Settings…", action: #selector(openSettings), binding: hk.openSettings)
 
         menu.addItem(.separator())
-        addBoundItem(menu, title: "Quit Slot Dock", action: #selector(NSApplication.terminate(_:)), binding: hk.quit)
+        addBoundItem(menu, title: "Quit Nicos Slot Dock", action: #selector(NSApplication.terminate(_:)), binding: hk.quit)
     }
 
     @discardableResult

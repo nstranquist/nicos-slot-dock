@@ -88,7 +88,7 @@ public struct DockPreferences: Codable, Equatable, Sendable {
     public var showNotificationBadges: Bool
     /// Opt-in: append running GUI apps not already on the strip (event-driven, ephemeral).
     public var showTransientRunningApps: Bool
-    /// Opt-in: inset overlapping windows so content clears the Slot Dock strip.
+    /// Opt-in: inset overlapping windows so content clears the Nicos Slot Dock strip.
     public var safeAreaPadding: Bool
     /// Extra points above the strip when safe-area padding is active.
     public var safeAreaExtraGap: Double

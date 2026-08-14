@@ -140,7 +140,7 @@ struct SystemDockReaderTests {
         </plist>
         """
         // A Dock plist can contain file and folder tiles under adjacent keys;
-        // Slot Dock must not present those as launchable application slots.
+        // Nicos Slot Dock must not present those as launchable application slots.
         let entries = SystemDockReader.parsePersistentApps(from: Data(xml.utf8))
         #expect(entries.isEmpty)
     }

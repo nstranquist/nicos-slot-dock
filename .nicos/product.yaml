@@ -1,0 +1,30 @@
+schema_version: 1
+id: product.nicos-slot-dock
+name: Nicos Slot Dock
+surface: products
+kind: product
+status: experimental
+persona: Mac users who want a compact, configurable launcher strip that works alongside the system Dock.
+jtbd: Launch custom applications, files, and URLs while optionally merging system Dock and live running-app state into one local strip.
+pricing: Free and open source under MIT.
+launch: built
+license: MIT
+role: supporting
+tags:
+  - swift
+  - macos
+  - desktop
+  - launcher
+  - local-first
+  - oss
+  - telemetry
+checks:
+  - name: test
+    command: [make, test]
+  - name: verify
+    command: [make, verify]
+  - name: universal
+    command: [make, verify-universal]
+  - name: privacy
+    command: [make, privacy-check]
+description: Native macOS launcher strip with custom slots, system Dock composition, running-app state, optional local permissions, and no network telemetry.

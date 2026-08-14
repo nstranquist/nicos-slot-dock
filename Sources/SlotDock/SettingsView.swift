@@ -134,7 +134,7 @@ struct SettingsView: View {
     private var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Slot Dock")
+                Text("Nicos Slot Dock")
                     .font(.system(size: 15, weight: .semibold))
                 Text(store.settingsTab == .slots
                     ? "Custom slots + import from your system Dock"
@@ -547,7 +547,7 @@ struct SettingsView: View {
         let alert = NSAlert()
         alert.messageText = action.title
         alert.informativeText = """
-        This turns on system Dock auto-hide so the stock Dock stays out of the way while you use Slot Dock.
+        This turns on system Dock auto-hide so the stock Dock stays out of the way while you use Nicos Slot Dock.
 
         \(action.payload)
         """
@@ -711,7 +711,7 @@ struct OptionsView: View {
                         }
                     }
                 ))
-                .help("Opt-in: open Slot Dock when you log in (default off). Requires installed .app.")
+                .help("Opt-in: open Nicos Slot Dock when you log in (default off). Requires installed .app.")
 
                 Text(LaunchAtLogin.status.description)
                     .font(.system(size: 11))
@@ -885,7 +885,7 @@ struct OptionsView: View {
                     get: { store.preferences.safeAreaPadding },
                     set: { store.setSafeAreaPadding($0) }
                 ))
-                .help("When the strip is open, lift overlapping windows so content stays visible. Off restores only windows Slot Dock moved.")
+                .help("When the strip is open, lift overlapping windows so content stays visible. Off restores only windows Nicos Slot Dock moved.")
 
                 if store.preferences.safeAreaPadding {
                     OptionsSliderRow(
@@ -974,7 +974,7 @@ struct OptionsView: View {
                     get: { store.preferences.showStatusItem },
                     set: { store.setShowStatusItem($0) }
                 ))
-                .help("Icon on the right side of the menu bar. Off = bottom strip only. Slot Dock keeps one recovery affordance available when auto-hide, edge hover, and shortcuts are otherwise disabled.")
+                .help("Icon on the right side of the menu bar. Off = bottom strip only. Nicos Slot Dock keeps one recovery affordance available when auto-hide, edge hover, and shortcuts are otherwise disabled.")
 
                 Toggle("Show in full-screen Spaces", isOn: Binding(
                     get: { store.preferences.showInFullScreen },
@@ -1029,7 +1029,7 @@ struct OptionsView: View {
                 ) { store.notifyHotkeysChanged() }
 
                 KeyBindingRow(
-                    title: "Quit Slot Dock",
+                    title: "Quit Nicos Slot Dock",
                     help: "Exit the app",
                     binding: hotkeyBinding(\.quit)
                 ) { store.notifyHotkeysChanged() }
@@ -1083,7 +1083,7 @@ struct OptionsView: View {
         .formStyle(.grouped)
         .padding(.bottom, 8)
         .confirmationDialog(
-            "Reset Slot Dock options?",
+            "Reset Nicos Slot Dock options?",
             isPresented: $confirmReset,
             titleVisibility: .visible
         ) {
@@ -1120,7 +1120,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "Slot Dock Settings"
+        window.title = "Nicos Slot Dock Settings"
         window.titlebarAppearsTransparent = true
         window.contentViewController = hosting
         window.setContentSize(NSSize(width: 640, height: 720))

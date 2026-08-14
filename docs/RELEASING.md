@@ -1,0 +1,47 @@
+# Releasing
+
+Source publication and binary distribution have separate gates.
+
+## Source release
+
+From a clean `main` checkout, run:
+
+```sh
+make publish-ready
+```
+
+The target runs unit tests, assembles and smoke-tests the app, cross-compiles a
+universal binary, verifies the complete Git history for private paths and
+personal email, runs gitleaks, checks required public files, and requires a
+clean working tree.
+
+Review the exact commit and create a SemVer tag only after the source gate is
+green. Do not attach `.build` output from the default local build to a public
+release.
+
+## Binary release
+
+A public macOS download requires:
+
+1. a Developer ID Application identity in the signing keychain;
+2. a notarytool keychain profile containing Apple notarization credentials;
+3. visible UI, Accessibility, Automation, multi-display, second-launch, and
+   natural-soak checks on the candidate version;
+4. a clean source-publication gate.
+
+Then run:
+
+```sh
+make package-release \
+  CODE_SIGN_IDENTITY="Developer ID Application: Example (TEAMID)" \
+  NOTARY_PROFILE="notary-profile"
+```
+
+The target builds arm64 and x86_64, combines them into one app, enables the
+hardened runtime and timestamp, submits a zip to Apple, waits for notarization,
+staples and validates the ticket, runs Gatekeeper assessment, and emits a final
+zip plus SHA-256 file.
+
+Never commit certificates, private keys, App Store Connect keys, Apple account
+credentials, or the notary profile. If notarization or Gatekeeper assessment
+fails, publish no binary.

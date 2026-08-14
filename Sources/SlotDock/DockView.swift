@@ -617,6 +617,6 @@ struct CollapsedTabView: View {
                 .padding(.top, 1)
         }
         .padding(.bottom, 2)
-        .help("Show Slot Dock")
+        .help("Show Nicos Slot Dock")
     }
 }

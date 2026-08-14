@@ -101,7 +101,7 @@ public struct KeyBinding: Codable, Equatable, Sendable {
     }
 }
 
-/// Named shortcuts for Slot Dock actions.
+/// Named shortcuts for Nicos Slot Dock actions.
 public struct DockHotkeys: Codable, Equatable, Sendable {
     public var toggleDock: KeyBinding
     public var openSettings: KeyBinding

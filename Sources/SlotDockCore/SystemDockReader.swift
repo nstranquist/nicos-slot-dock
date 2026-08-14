@@ -59,7 +59,7 @@ public struct SystemDockEntry: Equatable, Sendable, Identifiable {
     }
 }
 
-/// How Slot Dock composes system Dock apps with custom slots.
+/// How Nicos Slot Dock composes system Dock apps with custom slots.
 public enum SystemDockIntegration: String, Codable, CaseIterable, Sendable {
     /// Only custom slots (original behavior).
     case off
@@ -123,7 +123,7 @@ public enum SystemDockReader {
 
         for app in apps {
             let tileType = app["tile-type"] as? String ?? "file-tile"
-            // Slot Dock models application tiles only. Keep folders/URLs out of
+            // Nicos Slot Dock models application tiles only. Keep folders/URLs out of
             // the app strip until they have an explicit launch policy.
             guard tileType == "file-tile" else { continue }
 
