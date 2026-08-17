@@ -4,6 +4,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Point README images at `raw.githubusercontent.com`. GitHub currently
+  rewrites relative image paths to `/raw/main/...` URLs that return 404.
+
 ## 0.3.4 - 2026-08-17
 
 - Scan complete Git history with the gitleaks CLI in CI. The previous action

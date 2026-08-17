@@ -6,7 +6,7 @@ Nicos Slot Dock is a native macOS launcher strip that works alongside the
 system Dock. It stays on your Mac: there is no account, no network client, and
 no telemetry.
 
-<img src="assets/brand/nicos-slot-dock.svg" width="96" height="96" alt="Nicos Slot Dock application icon">
+<img src="https://raw.githubusercontent.com/nstranquist/nicos-slot-dock/main/assets/brand/nicos-slot-dock.png" width="96" height="96" alt="Nicos Slot Dock application icon">
 
 You can:
 
@@ -18,12 +18,12 @@ You can:
 This repository is the public source. There is no approved downloadable binary
 yet. Do not redistribute a locally ad-hoc-signed build as an official release.
 
-![Nicos Slot Dock strip with Finder, Safari, Terminal, Notes, Calendar, and System Settings](docs/assets/dock-strip.png)
+![Nicos Slot Dock strip with Finder, Safari, Terminal, Notes, Calendar, and System Settings](https://raw.githubusercontent.com/nstranquist/nicos-slot-dock/main/docs/assets/dock-strip.png)
 
 The strip screenshot uses stock macOS applications in **Off** mode. It does
 not show a personal Dock.
 
-![Nicos Slot Dock Settings, Options tab, with pin-open enabled and system Dock integration off](docs/assets/settings-options.png)
+![Nicos Slot Dock Settings, Options tab, with pin-open enabled and system Dock integration off](https://raw.githubusercontent.com/nstranquist/nicos-slot-dock/main/docs/assets/settings-options.png)
 
 The settings screenshot is the real Options pane from a source-built app.
 Launch at login stays unavailable until the app is installed under
