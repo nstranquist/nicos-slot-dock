@@ -23,9 +23,10 @@ yet. Do not redistribute a locally ad-hoc-signed build as an official release.
 The strip screenshot uses stock macOS applications in **Off** mode. It does
 not show a personal Dock.
 
-![Nicos Slot Dock Settings, Options tab, with pin-open enabled and system Dock integration off](https://raw.githubusercontent.com/nstranquist/nicos-slot-dock/main/docs/assets/settings-options.png)
+![Nicos Slot Dock Settings, Options tab. Launch at login is on in this capture; the product default is off.](https://raw.githubusercontent.com/nstranquist/nicos-slot-dock/main/docs/assets/settings-options.png)
 
 The settings screenshot is the real Options pane from the installed app.
+Launch at login is on in this capture. The product default is off.
 
 ## Highlights
 

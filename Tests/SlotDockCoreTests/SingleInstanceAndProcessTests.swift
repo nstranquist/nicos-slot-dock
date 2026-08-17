@@ -4,6 +4,17 @@ import Testing
 
 @Suite("Single instance + process identity")
 struct SingleInstanceAndProcessTests {
+    @Test("launch-at-login sync stays off for isolated processes")
+    func launchAtLoginSyncPolicy() {
+        #expect(LaunchAtLoginSyncPolicy.shouldApply(environment: [:]))
+        #expect(LaunchAtLoginSyncPolicy.shouldApply(environment: ["SLOT_DOCK_HEADLESS": "1"]) == false)
+        #expect(LaunchAtLoginSyncPolicy.shouldApply(environment: ["SLOT_DOCK_HEADLESS": "true"]) == false)
+        #expect(LaunchAtLoginSyncPolicy.shouldApply(environment: ["SLOT_DOCK_SELFTEST": "1"]) == false)
+        #expect(LaunchAtLoginSyncPolicy.shouldApply(environment: ["SLOT_DOCK_ALLOW_MULTI": "1"]) == false)
+        #expect(LaunchAtLoginSyncPolicy.shouldApply(environment: ["SLOT_DOCK_CONFIG": "/tmp/demo.json"]) == false)
+        #expect(LaunchAtLoginSyncPolicy.shouldApply(environment: ["SLOT_DOCK_CONFIG": ""]) )
+    }
+
     @Test("claim when no live peers")
     func claimAlone() {
         let d = SingleInstancePolicy.decide(selfPID: 100, peers: [])

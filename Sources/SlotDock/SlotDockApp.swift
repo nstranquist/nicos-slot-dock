@@ -134,10 +134,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             NSApp.setActivationPolicy(.accessory)
         }
 
-        // Headless / self-test share the production bundle id. Do not talk to
-        // SMAppService there — applyPreference(false) would unregister the
-        // installed app's login item.
-        if !SlotDockHeadless.isHeadless && !SlotDockHeadless.isSelfTest {
+        // Isolated and headless processes share the production bundle id.
+        // Applying a throwaway config's launchAtLogin=false would unregister
+        // the installed app's login item.
+        if LaunchAtLoginSyncPolicy.shouldApply(environment: ProcessInfo.processInfo.environment) {
             store.syncLaunchAtLoginFromPreferences()
         }
         dockController.show()

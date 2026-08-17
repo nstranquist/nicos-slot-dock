@@ -4,6 +4,14 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## 0.3.6 - 2026-08-17
+
+- Skip launch-at-login sync for multi-instance and `SLOT_DOCK_CONFIG` overrides.
+- Say that the Settings screenshot has launch at login on, and that the default is off.
+- Drop the stale “current tag” line from 0.3.3.
+- Point the release guide at the next SemVer tag, not `v0.3.3`.
+- Keep the binary-release guide free of this machine's signing identity.
+
 ## 0.3.5 - 2026-08-17
 
 - Point README images at `raw.githubusercontent.com`. GitHub currently
@@ -29,7 +37,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Keep headless smoke from changing the installed app's login item.
 - Run CI on macOS 15 with Xcode 16 and a full-history privacy scan.
 
-This version is the current public-source tag candidate.
+This version was an earlier public-source tag.
 
 ## 0.3.2 - 2026-08-14
 

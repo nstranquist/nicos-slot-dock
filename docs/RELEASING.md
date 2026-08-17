@@ -30,7 +30,8 @@ After the GitHub repository exists:
 2. Enable **Private vulnerability reporting**.
 3. Confirm the repository security page exposes a private report form.
 4. Confirm the public issue templates do not ask for vulnerability details.
-5. Create `v0.3.3` only after the pushed commit passes the source gate.
+5. Create the next SemVer tag (`vX.Y.Z`) only after the pushed commit
+   passes the source gate.
 
 The canonical source identity is **Nicos Slot Dock** in the
 `nicos-slot-dock` repository. Complete a trademark clearance before commercial
@@ -41,9 +42,8 @@ promotion if the owner decides that the market risk warrants it.
 A public macOS download requires:
 
 1. a Developer ID Application identity in the signing keychain.
-   This machine currently has only `Apple Development`. That identity
-   is enough for local `make install`. It is not enough for
-   `make package-release`.
+   An Apple Development identity is enough for local `make install`.
+   It is not enough for `make package-release`.
 2. a notarytool keychain profile containing Apple notarization credentials.
 3. visible UI, Accessibility, Automation, multi-display, second-launch, and
    natural-soak checks on the candidate version.
