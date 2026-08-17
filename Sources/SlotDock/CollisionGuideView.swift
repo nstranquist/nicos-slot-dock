@@ -226,7 +226,7 @@ struct CollisionGuideView: View {
         alert.messageText = title
         alert.informativeText = """
         This will change system Dock preferences via AppleScript (with your confirmation). \
-        A prefs snapshot was saved first if none existed.
+        A snapshot of current Dock prefs will be saved first if none exists.
 
         Script:
         \(source)

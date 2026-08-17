@@ -88,12 +88,14 @@ final class SlotDockStore: ObservableObject {
 
     /// Apply a new running snapshot (from RunningAppsMonitor).
     /// - Returns: `true` when composed strip membership changed (needs geometry relayout).
-    /// Cheap no-op when snapshot unchanged, or when transient icons are off (dots update via monitor `@Published` only).
+    /// Recompose on any snapshot change: same-bundle other-path copies are
+    /// independent of the transient-extras preference. Dots still update via
+    /// the monitor `@Published` snapshot when membership is unchanged.
     @discardableResult
     func applyRunningSnapshot(_ snapshot: RunningAppSnapshot) -> Bool {
         let changed = snapshot != runningSnapshot
         runningSnapshot = snapshot
-        guard preferences.showTransientRunningApps, changed else { return false }
+        guard changed else { return false }
         let before = displayItems
         recomposeDisplay()
         let stripChanged = before != displayItems

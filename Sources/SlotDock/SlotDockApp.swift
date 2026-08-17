@@ -134,7 +134,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             NSApp.setActivationPolicy(.accessory)
         }
 
-        store.syncLaunchAtLoginFromPreferences()
+        // Headless / self-test share the production bundle id. Do not talk to
+        // SMAppService there — applyPreference(false) would unregister the
+        // installed app's login item.
+        if !SlotDockHeadless.isHeadless && !SlotDockHeadless.isSelfTest {
+            store.syncLaunchAtLoginFromPreferences()
+        }
         dockController.show()
 
         installFocusHandoffListener()
@@ -298,7 +303,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         pin.state = store.preferences.pinOpen ? .on : .off
 
         if let message = [store.configurationError, store.safeAreaError, store.lastLaunchError].compactMap({ $0 }).first {
-            let problem = NSMenuItem(title: "⚠ (message)", action: #selector(openSettings), keyEquivalent: "")
+            let problem = NSMenuItem(title: "⚠ \(message)", action: #selector(openSettings), keyEquivalent: "")
             problem.target = self
             problem.toolTip = message
             menu.addItem(problem)
