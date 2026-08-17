@@ -4,6 +4,11 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## 0.3.4 - 2026-08-17
+
+- Scan complete Git history with the gitleaks CLI in CI. The previous action
+  failed on the root commit because it requested a parent that does not exist.
+
 ## 0.3.3 - 2026-08-17
 
 - Sign each app bundle with the Apple Events Automation entitlement.
