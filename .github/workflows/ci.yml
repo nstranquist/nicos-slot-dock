@@ -15,14 +15,25 @@ concurrency:
 jobs:
   verify:
     name: Swift and macOS verification
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 30
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
-      - name: Show toolchain
-        run: swift --version
+      - name: Select Xcode 16
+        run: |
+          set -euo pipefail
+          for app in /Applications/Xcode_16.4.app /Applications/Xcode_16.3.app /Applications/Xcode_16.2.app /Applications/Xcode.app; do
+            if [[ -d "$app" ]]; then
+              sudo xcode-select -s "$app"
+              break
+            fi
+          done
+          xcode-select -p
+          swift --version
 
       - name: Verify source and universal app
         run: make ci
