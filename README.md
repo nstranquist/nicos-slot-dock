@@ -1,26 +1,69 @@
 # Nicos Slot Dock
 
+[![CI](https://github.com/nstranquist/nicos-slot-dock/actions/workflows/ci.yml/badge.svg)](https://github.com/nstranquist/nicos-slot-dock/actions/workflows/ci.yml)
+
 Nicos Slot Dock is a native macOS launcher strip that works alongside the
-system Dock. It can:
+system Dock. It stays on your Mac: there is no account, no network client, and
+no telemetry.
 
-- add custom applications, files, and URLs.
-- merge or mirror the system Dock.
-- show running applications and notification badges.
-- reveal the strip from the screen edge, menu bar, or an optional shortcut.
+<img src="assets/brand/nicos-slot-dock.svg" width="96" height="96" alt="Nicos Slot Dock application icon">
 
-The project is open source under the MIT License and is being prepared
-for its first public source release. There is currently no approved
-downloadable binary. Do not redistribute a locally ad-hoc-signed build as an
-official release.
+You can:
+
+- add custom applications, files, and URLs
+- merge or mirror the system Dock, or show custom slots only
+- show running applications and notification badges
+- reveal the strip from the screen edge, the menu bar, or an optional shortcut
+
+This repository is the public source. There is no approved downloadable binary
+yet. Do not redistribute a locally ad-hoc-signed build as an official release.
+
+![Nicos Slot Dock strip with Finder, Safari, Terminal, Notes, Calendar, and System Settings](docs/assets/dock-strip.png)
+
+The strip screenshot uses stock macOS applications in **Off** mode. It does
+not show a personal Dock.
+
+![Nicos Slot Dock Settings, Options tab, with pin-open enabled and system Dock integration off](docs/assets/settings-options.png)
+
+The settings screenshot is the real Options pane from a source-built app.
+Launch at login stays unavailable until the app is installed under
+`/Applications`.
+
+## Highlights
+
+- Native AppKit and SwiftUI strip with no Dock icon during normal use
+- **Merge** (default): custom slots first, then live system Dock applications
+- **Mirror**: system Dock applications only
+- **Off**: custom slots only
+- Drag an application, file, or URL onto the strip to add a custom slot
+- Right-click a tile for launch, reveal, remove, window, and process actions
+- Optional running-application dots, notification badges, and transient tiles
+- Optional window safe-area inset so content clears the strip
+- Launch at login is off by default
+- Configuration is a versioned JSON file on disk
 
 ## Requirements
 
-- macOS 14 or later.
-- Swift 6 through Xcode or the Xcode Command Line Tools.
-- gitleaks for the complete `make publish-ready` history scan.
-- ImageMagick (only for app icon regeneration).
+- macOS 14 or later
+- Swift 6 through Xcode or the Xcode Command Line Tools
+- gitleaks only for the complete `make publish-ready` history scan
+- ImageMagick only to regenerate the app icon
 
-## Build and verify
+## Install from source
+
+```sh
+git clone https://github.com/nstranquist/nicos-slot-dock.git
+cd nicos-slot-dock
+make install
+```
+
+`make install` builds a release app, signs it ad-hoc, and copies it to
+`/Applications/Nicos Slot Dock.app`. Local ad-hoc signing is enough to run the
+app on the same Mac. A public binary also needs a Developer ID identity,
+notarization, and a visible-device review. See
+[the release guide](docs/RELEASING.md).
+
+To build without installing:
 
 ```sh
 make build             # .build/app/Nicos Slot Dock.app
@@ -32,21 +75,23 @@ make verify-universal  # arm64 plus x86_64 app verification
 make publish-ready     # complete public-source gate
 ```
 
-Local builds use ad-hoc signing by default. If you do not provide release
-credentials, `make package-release` fails. See
-[the release guide](docs/RELEASING.md).
+To remove the installed app:
+
+```sh
+make uninstall
+```
+
+If you enabled **Launch at login**, turn that option off in Settings first.
 
 ## How it works
+
+Move the pointer to the configured screen edge or click the thin reveal tab.
+You can also use the menu-bar item. The strip can stay open when you pin it.
 
 The default **Merge** mode places custom slots before applications from the
 system Dock. **Mirror** shows the system Dock applications only. **Off** shows
 custom slots only. Optional transient tiles can show running applications that
 are not otherwise present.
-
-Move the pointer to the configured screen edge or click the thin reveal tab.
-You can also use the menu-bar item. Drag an application, file, or URL onto the
-strip to create a custom slot. Right-click a tile for launch, reveal, remove,
-window, and process actions.
 
 Configuration is stored in:
 

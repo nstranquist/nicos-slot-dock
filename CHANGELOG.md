@@ -4,14 +4,18 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-## 0.3.3 - 2026-08-14
+## 0.3.3 - 2026-08-17
 
 - Sign each app bundle with the Apple Events Automation entitlement.
 - Stop the build if the signed app does not contain the required entitlement.
 - Include the entitlement file in the source-publication gate.
+- Add privacy-safe product screenshots of the launcher strip and Settings.
+- Show the real fault text in the status-item error row.
+- Recompose the strip when running-app identity changes so other-path copies appear immediately.
+- Keep headless smoke from changing the installed app's login item.
+- Run CI on macOS 15 with Xcode 16 and a full-history privacy scan.
 
-This version is the current public-source tag candidate. It has not been tagged
-or published.
+This version is the current public-source tag candidate.
 
 ## 0.3.2 - 2026-08-14
 
