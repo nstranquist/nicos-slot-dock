@@ -41,6 +41,9 @@ promotion if the owner decides that the market risk warrants it.
 A public macOS download requires:
 
 1. a Developer ID Application identity in the signing keychain.
+   This machine currently has only `Apple Development`. That identity
+   is enough for local `make install`. It is not enough for
+   `make package-release`.
 2. a notarytool keychain profile containing Apple notarization credentials.
 3. visible UI, Accessibility, Automation, multi-display, second-launch, and
    natural-soak checks on the candidate version.

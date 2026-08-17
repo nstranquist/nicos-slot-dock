@@ -22,7 +22,8 @@ changesets and records both members of each duplicate pair.
 Each reconstructed commit retains the original author date and carries
 `Source-Commit`, `Equivalent-Source-Commit` where applicable,
 `Source-App-Tree`, and `Original-Subject` trailers. Author email addresses are
-normalized to the public GitHub noreply address.
+normalized to the public GitHub noreply address. Public `Original-Subject`
+values name only Nicos Slot Dock. They do not repeat private monorepo subjects.
 
 ## Privacy filter
 

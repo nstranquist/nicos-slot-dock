@@ -10,7 +10,7 @@ assets:
     - path: docs/assets/settings-options.png
       kind: screenshot
       alt: Nicos Slot Dock Settings, Options tab, with pin-open enabled and system Dock integration off
-      caption: Real Options pane from a source-built app.
+      caption: Real Options pane from the installed app.
     - path: assets/brand/nicos-slot-dock.svg
       kind: logo
       alt: Nicos Slot Dock application icon

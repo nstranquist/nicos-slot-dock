@@ -4,8 +4,14 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## 0.3.5 - 2026-08-17
+
 - Point README images at `raw.githubusercontent.com`. GitHub currently
   rewrites relative image paths to `/raw/main/...` URLs that return 404.
+- Recapture Settings from the installed `/Applications` app so Launch at
+  login shows a real toggle.
+- Run CI on version tags as well as `main`.
+- Keep public `Original-Subject` trailers Slot Dock-only.
 
 ## 0.3.4 - 2026-08-17
 

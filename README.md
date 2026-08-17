@@ -25,9 +25,7 @@ not show a personal Dock.
 
 ![Nicos Slot Dock Settings, Options tab, with pin-open enabled and system Dock integration off](https://raw.githubusercontent.com/nstranquist/nicos-slot-dock/main/docs/assets/settings-options.png)
 
-The settings screenshot is the real Options pane from a source-built app.
-Launch at login stays unavailable until the app is installed under
-`/Applications`.
+The settings screenshot is the real Options pane from the installed app.
 
 ## Highlights
 
