@@ -8,7 +8,7 @@ persona: Mac users who want a compact, configurable launcher strip that works al
 jtbd: Launch custom applications, files, and URLs while optionally merging system Dock and live running-app state into one local strip.
 pricing: Free and open source under MIT.
 launch: built
-launch_blocker: "Apple Developer Program membership is active (2026-08-19). Downloadable binaries still require a Developer ID Application certificate, notarization, and visible-device review."
+launch_blocker: "Apple Developer Program membership is active and Developer ID Application identity C82D23RNQ9 is in the login Keychain (2026-08-19). Downloadable binaries still require notarization, stapling, and visible-device review."
 license: MIT
 role: experiment
 tags:
