@@ -8,6 +8,7 @@ persona: Mac users who want a compact, configurable launcher strip that works al
 jtbd: Launch custom applications, files, and URLs while optionally merging system Dock and live running-app state into one local strip.
 pricing: Free and open source under MIT.
 launch: built
+launch_blocker: "Apple Developer Program membership is active (2026-08-19). Downloadable binaries still require a Developer ID Application certificate, notarization, and visible-device review."
 license: MIT
 role: experiment
 tags:
@@ -24,3 +25,8 @@ checks:
     timeout_seconds: 180
 description: Native macOS launcher strip with custom slots, system Dock composition, running-app state, optional local permissions, and no network telemetry.
 portfolio_manifest: portfolio/manifest.yaml
+refs:
+  - kind: documented_by
+    target: doc.apple-developer-program-membership
+  - kind: reads
+    target: capability.apple-distribution
