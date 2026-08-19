@@ -23,3 +23,4 @@ checks:
     command: [make, publish-ready]
     timeout_seconds: 180
 description: Native macOS launcher strip with custom slots, system Dock composition, running-app state, optional local permissions, and no network telemetry.
+portfolio_manifest: portfolio/manifest.yaml

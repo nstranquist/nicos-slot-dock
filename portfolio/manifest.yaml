@@ -1,16 +1,50 @@
-schema_version: 1
+schema_version: 2
 product_id: product.nicos-slot-dock
 visibility: public
 reviewed: true
+presentation:
+    summary: A native macOS launcher strip with configurable slots and optional Dock integration.
+    detail: Combine custom applications, files, and URLs with optional system Dock and live running-app state while keeping all product telemetry local.
+    language: Swift
+    lane: Native macOS product engineering
+access:
+    profile: macos-app
+    primary_action:
+        kind: source
+        label: Build Nicos Slot Dock
+        url: https://github.com/nstranquist/nicos-slot-dock#install-from-source
+    repository_url: https://github.com/nstranquist/nicos-slot-dock
+    documentation_url: https://github.com/nstranquist/nicos-slot-dock#project-documentation
+    feedback_url: https://github.com/nstranquist/nicos-slot-dock/issues/new
+    smoke_argv: [make, verify]
+proof:
+    claims:
+        - id: configurable-composition
+          statement: The launcher composes custom slots, optional system Dock items, and running applications.
+          evidence_kind: documentation
+          evidence_url: https://github.com/nstranquist/nicos-slot-dock#how-it-works
+        - id: publication-gate
+          statement: The repository provides one publish-ready command for its local release checks.
+          evidence_kind: test
+          evidence_url: https://github.com/nstranquist/nicos-slot-dock#project-documentation
+    boundaries:
+        - The public release contains source and no notarized downloadable application binary.
+        - System Dock integration and local permissions are optional and user-controlled.
 assets:
     - path: docs/assets/dock-strip.png
       kind: screenshot
       alt: Nicos Slot Dock strip with Finder, Safari, Terminal, Notes, Calendar, and System Settings
       caption: Real strip capture using stock macOS apps in Off mode. No personal Dock.
+      public: true
+      provenance: local-stock-app-capture
+      copyright_owner: Nico Stranquist
     - path: docs/assets/settings-options.png
       kind: screenshot
       alt: Nicos Slot Dock Settings, Options tab, with pin-open enabled and system Dock integration off
       caption: Real Options pane from the installed app. Launch at login is on in this capture. The product default is off.
+      public: true
+      provenance: local-stock-app-capture
+      copyright_owner: Nico Stranquist
     - path: assets/brand/nicos-slot-dock.svg
       kind: logo
       alt: Nicos Slot Dock application icon
