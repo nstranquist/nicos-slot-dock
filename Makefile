@@ -143,7 +143,7 @@ publish-ready: ci secrets-check
 package-local: build
 	@mkdir -p .build/artifacts
 	@ditto -c -k --keepParent "$(APP_DIR)" ".build/artifacts/NicosSlotDock-$(APP_VERSION)-local-adhoc.zip"
-	@shasum -a 256 ".build/artifacts/NicosSlotDock-$(APP_VERSION)-local-adhoc.zip" > ".build/artifacts/NicosSlotDock-$(APP_VERSION)-local-adhoc.zip.sha256"
+	@cd .build/artifacts && shasum -a 256 "NicosSlotDock-$(APP_VERSION)-local-adhoc.zip" > "NicosSlotDock-$(APP_VERSION)-local-adhoc.zip.sha256"
 	@echo ".build/artifacts/NicosSlotDock-$(APP_VERSION)-local-adhoc.zip"
 
 # Requires an installed Developer ID identity and a notarytool keychain profile.
@@ -158,7 +158,7 @@ package-release:
 	@xcrun stapler validate "$(UNIVERSAL_APP)"
 	@spctl --assess --type execute --verbose=4 "$(UNIVERSAL_APP)"
 	@ditto -c -k --keepParent "$(UNIVERSAL_APP)" ".build/artifacts/NicosSlotDock-$(APP_VERSION).zip"
-	@shasum -a 256 ".build/artifacts/NicosSlotDock-$(APP_VERSION).zip" > ".build/artifacts/NicosSlotDock-$(APP_VERSION).zip.sha256"
+	@cd .build/artifacts && shasum -a 256 "NicosSlotDock-$(APP_VERSION).zip" > "NicosSlotDock-$(APP_VERSION).zip.sha256"
 	@echo ".build/artifacts/NicosSlotDock-$(APP_VERSION).zip"
 
 icons:
