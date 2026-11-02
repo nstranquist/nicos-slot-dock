@@ -2,3 +2,6 @@
 .build/
 .swiftpm/
 *.xcuserstate
+.scratchpad-audit.jsonl
+.scratchpad-history/
+agents/
