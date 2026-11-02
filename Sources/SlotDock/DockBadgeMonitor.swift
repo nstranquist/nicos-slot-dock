@@ -19,6 +19,8 @@ final class DockBadgeMonitor: ObservableObject {
     @Published private(set) var liveIconTokens: [String: String] = [:]
     /// Date+locale key so Calendar tiles redraw at midnight without a relaunch.
     @Published private(set) var calendarIconKey = CalendarDockIcon.iconCacheKey()
+    /// Empty vs full so the Trash tile tracks Finder Trash contents.
+    @Published private(set) var trashIconKey = TrashSlot.iconCacheKey(isEmpty: true)
 
     /// Prompt for Accessibility when Messages/WhatsApp badges need Dock AX.
     var onRequestAccessibility: (() -> Void)?
@@ -118,6 +120,16 @@ final class DockBadgeMonitor: ObservableObject {
             changed = true
             SlotDockTelemetry.iconCache.info(
                 "calendar icon key=\(nextCalendarKey, privacy: .public)"
+            )
+        }
+        let nextTrashKey = TrashSlot.iconCacheKey(
+            isEmpty: TrashSlot.isEmpty(at: TrashSlot.liveDirectoryPaths())
+        )
+        if nextTrashKey != trashIconKey {
+            trashIconKey = nextTrashKey
+            changed = true
+            SlotDockTelemetry.iconCache.info(
+                "trash icon key=\(nextTrashKey, privacy: .public)"
             )
         }
         requestAccessibilityIfNeeded()

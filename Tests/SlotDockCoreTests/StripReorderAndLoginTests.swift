@@ -172,6 +172,9 @@ struct KeepAsCustomPolicyTests {
         #expect(
             KeepAsCustomPolicy.state(origin: .custom, path: "/Apps/X.app", customSlots: []) == .unavailable
         )
+        #expect(
+            KeepAsCustomPolicy.state(origin: .trash, path: "/Users/me/.Trash", customSlots: []) == .unavailable
+        )
     }
 
     @Test("empty path is unavailable")

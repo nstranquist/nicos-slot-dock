@@ -119,9 +119,11 @@ enum StripDragPasteboard {
 final class StripIconHitView: NSView, NSDraggingSource {
     var slotID: String = ""
     var allowsDragReorder: Bool = false
+    var acceptsFileDrop: Bool = false
     var onClick: (() -> Void)?
     var onRightClick: ((NSEvent) -> Void)?
     var onReorderDrop: ((String) -> Void)? // dragged slot id dropped on this icon
+    var onFileDrop: (([String]) -> Void)?
     var onDragActiveChange: ((Bool) -> Void)?
 
     private var press = StripPressSession(dragThreshold: 4, allowsDrag: true, requiresCommand: true)
@@ -221,12 +223,19 @@ final class StripIconHitView: NSView, NSDraggingSource {
     // MARK: NSDraggingDestination (drop other custom slots here)
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        if acceptsFileDrop, hasFileDrop(sender) {
+            onDragActiveChange?(true)
+            return .delete
+        }
         guard allowsDragReorder, readDraggedSlotID(sender) != nil else { return [] }
         onDragActiveChange?(true)
         return .move
     }
 
     override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        if acceptsFileDrop, hasFileDrop(sender) {
+            return .delete
+        }
         guard allowsDragReorder, readDraggedSlotID(sender) != nil else { return [] }
         return .move
     }
@@ -236,10 +245,16 @@ final class StripIconHitView: NSView, NSDraggingSource {
     }
 
     override func prepareForDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        allowsDragReorder && readDraggedSlotID(sender) != nil
+        if acceptsFileDrop, hasFileDrop(sender) { return true }
+        return allowsDragReorder && readDraggedSlotID(sender) != nil
     }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        if acceptsFileDrop, let paths = readDroppedFilePaths(sender) {
+            onFileDrop?(paths)
+            onDragActiveChange?(false)
+            return true
+        }
         guard let dragged = readDraggedSlotID(sender), dragged != slotID else { return false }
         onReorderDrop?(dragged)
         onDragActiveChange?(false)
@@ -251,6 +266,23 @@ final class StripIconHitView: NSView, NSDraggingSource {
         if let s = pb.string(forType: StripDragPasteboard.slotIDType), !s.isEmpty { return s }
         if let s = pb.string(forType: .string), !s.isEmpty { return s }
         return nil
+    }
+
+    private func fileDropReadingOptions() -> [NSPasteboard.ReadingOptionKey: Any] {
+        [.urlReadingFileURLsOnly: true]
+    }
+
+    private func hasFileDrop(_ sender: any NSDraggingInfo) -> Bool {
+        sender.draggingPasteboard.canReadObject(forClasses: [NSURL.self], options: fileDropReadingOptions())
+    }
+
+    private func readDroppedFilePaths(_ sender: any NSDraggingInfo) -> [String]? {
+        let pb = sender.draggingPasteboard
+        guard let urls = pb.readObjects(forClasses: [NSURL.self], options: fileDropReadingOptions()) as? [URL] else {
+            return nil
+        }
+        let paths = urls.map(\.path).filter { !$0.isEmpty }
+        return paths.isEmpty ? nil : paths
     }
 
     override func mouseEntered(with event: NSEvent) {
@@ -272,8 +304,16 @@ final class StripIconHitView: NSView, NSDraggingSource {
                 userInfo: nil
             )
         )
-        // Accept drops of custom slot IDs.
-        registerForDraggedTypes([StripDragPasteboard.slotIDType, .string])
+        registerDragTypes()
+    }
+
+    func registerDragTypes() {
+        var types: [NSPasteboard.PasteboardType] = [StripDragPasteboard.slotIDType, .string]
+        if acceptsFileDrop {
+            types.append(.fileURL)
+        }
+        unregisterDraggedTypes()
+        registerForDraggedTypes(types)
     }
 
     override func cursorUpdate(with event: NSEvent) {
@@ -308,9 +348,11 @@ struct StripIconHitRepresentable: NSViewRepresentable {
     /// Empty clears tooltip (disabled). Uses AppKit toolTip for smooth system delay.
     var toolTip: String = ""
     var allowsDragReorder: Bool
+    var acceptsFileDrop: Bool = false
     var onClick: () -> Void
     var onRightClick: (NSEvent) -> Void
     var onReorderDrop: (String) -> Void
+    var onFileDrop: (([String]) -> Void)? = nil
     var onDragHighlight: ((Bool) -> Void)?
 
     func makeNSView(context: Context) -> StripIconHitView {
@@ -326,10 +368,13 @@ struct StripIconHitRepresentable: NSViewRepresentable {
     private func apply(_ view: StripIconHitView) {
         view.slotID = slotID
         view.allowsDragReorder = allowsDragReorder
+        view.acceptsFileDrop = acceptsFileDrop
         view.onClick = onClick
         view.onRightClick = onRightClick
         view.onReorderDrop = onReorderDrop
+        view.onFileDrop = onFileDrop
         view.onDragActiveChange = onDragHighlight
+        view.registerDragTypes()
         let trimmed = toolTip.trimmingCharacters(in: .whitespacesAndNewlines)
         // Only write when changed — avoids tooltip flicker / re-register thrash.
         let next: String? = trimmed.isEmpty ? nil : trimmed

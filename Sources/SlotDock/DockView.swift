@@ -76,6 +76,7 @@ struct DockView: View {
                                 : nil,
                             liveIconToken: badges.liveIconToken(for: item.slot),
                             calendarIconKey: badges.calendarIconKey,
+                            trashIconKey: badges.trashIconKey,
                             progress: badges.progress(for: item.slot),
                             customIndex: item.origin == .custom
                                 ? store.customIndex(of: item.slot.id)
@@ -165,15 +166,16 @@ struct DockView: View {
         }
     }
 
-    /// Divider between custom → system Dock, and pinned strip → transient running (merge mode).
+    /// Divider before Trash always. In merge mode, also custom → system Dock
+    /// and pinned strip → transient running when that preference is on.
     private func shouldShowDivider(before index: Int) -> Bool {
-        guard store.preferences.systemDockIntegration == .merge,
-              store.preferences.showSystemDockDivider,
-              index > 0
-        else { return false }
+        guard index > 0, index < store.displayItems.count else { return false }
         let prev = store.displayItems[index - 1].origin
         let cur = store.displayItems[index].origin
-        // Group boundaries: custom → system Dock, and pinned strip → transient running.
+        if prev != .trash && cur == .trash { return true }
+        guard store.preferences.systemDockIntegration == .merge,
+              store.preferences.showSystemDockDivider
+        else { return false }
         if prev == .custom && cur == .systemDock { return true }
         if prev != .running && cur == .running { return true }
         return false
@@ -353,6 +355,7 @@ struct SlotIconButton: View {
     var badge: DockBadge?
     var liveIconToken: String = ""
     var calendarIconKey: String = ""
+    var trashIconKey: String = ""
     var progress: Double?
     var customIndex: Int?
     var customCount: Int = 0
@@ -363,6 +366,9 @@ struct SlotIconButton: View {
 
     private var slot: Slot { item.slot }
     private var isCustom: Bool { item.origin == .custom }
+    private var isTrash: Bool {
+        item.origin == .trash || TrashSlot.matches(slot: slot, canonicalPath: TrashSlot.canonicalPath())
+    }
 
     /// Short native tooltip (AppKit toolTip — delayed & cheap).
     private var tooltipText: String {
@@ -371,6 +377,7 @@ struct SlotIconButton: View {
         switch item.origin {
         case .systemDock: parts.append("system Dock")
         case .running: parts.append("running")
+        case .trash: parts.append("Trash")
         case .custom: break
         }
         if isRunning, item.origin != .running { parts.append("open") }
@@ -390,7 +397,8 @@ struct SlotIconButton: View {
                     slot: slot,
                     size: size - 6,
                     liveToken: liveIconToken,
-                    calendarIconKey: calendarIconKey
+                    calendarIconKey: calendarIconKey,
+                    trashIconKey: trashIconKey
                 )
                     .frame(width: size - 6, height: size - 6)
                     .allowsHitTesting(false)
@@ -412,6 +420,7 @@ struct SlotIconButton: View {
                     toolTip: tooltipText,
                     // ⌘+drag reorders custom slots only (gate is also in StripPressSession).
                     allowsDragReorder: isCustom,
+                    acceptsFileDrop: isTrash,
                     onClick: {
                         _ = store.launch(slotID: slot.id)
                     },
@@ -420,6 +429,9 @@ struct SlotIconButton: View {
                     },
                     onReorderDrop: { draggedID in
                         _ = store.reorderCustomSlot(draggedID: draggedID, beforeID: slot.id)
+                    },
+                    onFileDrop: { paths in
+                        _ = store.recycleDroppedPaths(paths)
                     },
                     onDragHighlight: { dragHighlight = $0 }
                 )
@@ -470,9 +482,11 @@ struct SlotIconButton: View {
         .onDisappear { NSCursor.arrow.set() }
         .accessibilityLabel(accessibilityName)
         .accessibilityHint(
-            isCustom
-                ? "Click to open. Command-drag to reorder. Right-click for more."
-                : "Click to open. Right-click for Options (Keep as Custom Slot)."
+            isTrash
+                ? "Click to open Trash. Drop files to move them to the Trash. Right-click to empty."
+                : isCustom
+                    ? "Click to open. Command-drag to reorder. Right-click for more."
+                    : "Click to open. Right-click for Options (Keep as Custom Slot)."
         )
     }
 
@@ -524,7 +538,9 @@ struct SlotIconButton: View {
                 bundleIdentifier: identity.bundleIdentifier,
                 isSelfApplication: SlotAppMenuPolicy.isSelfApplication(
                     bundleIdentifier: identity.bundleIdentifier
-                )
+                ),
+                isTrashSlot: isTrash,
+                trashIsEmpty: store.trashIsEmpty()
             )
         )
         NativeContextMenu.popUp(model: model, with: event, for: view) { action, instance in
@@ -538,6 +554,7 @@ struct SlotIconImage: View {
     let size: CGFloat
     var liveToken: String = ""
     var calendarIconKey: String = ""
+    var trashIconKey: String = ""
 
     var body: some View {
         Group {
@@ -545,7 +562,8 @@ struct SlotIconImage: View {
                 for: slot,
                 pointSize: size,
                 liveToken: liveToken,
-                calendarIconKey: calendarIconKey
+                calendarIconKey: calendarIconKey,
+                trashIconKey: trashIconKey
             ) {
                 Image(nsImage: resolved.image)
                     .resizable()

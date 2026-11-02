@@ -30,6 +30,10 @@ public enum SlotContextAction: String, Equatable, Sendable {
     case hideStrip
     case showStrip
     case refreshSystemDock
+    /// Permanently erase items in Finder Trash.
+    case emptyTrash
+    /// Hide the composed Trash tile (`showTrash = false`).
+    case hideTrash
     /// Enable login-item for this `.app` target (fail-closed at runtime).
     case enableOpenAtLogin
     /// Remove login-item for this `.app` target.
@@ -193,6 +197,10 @@ public struct SlotContextMenuInput: Equatable, Sendable {
     public var bundleIdentifier: String?
     /// True when this tile is Nicos Slot Dock itself (no self-relaunch).
     public var isSelfApplication: Bool
+    /// Finder Trash tile (composed or a custom slot pointing at Trash).
+    public var isTrashSlot: Bool
+    /// True when every watched trash directory is empty (Empty Trash off).
+    public var trashIsEmpty: Bool
 
     public init(
         label: String,
@@ -209,7 +217,9 @@ public struct SlotContextMenuInput: Equatable, Sendable {
         instances: [SlotInstanceRef] = [],
         isHidden: Bool = false,
         bundleIdentifier: String? = nil,
-        isSelfApplication: Bool = false
+        isSelfApplication: Bool = false,
+        isTrashSlot: Bool = false,
+        trashIsEmpty: Bool = true
     ) {
         self.label = label
         self.origin = origin
@@ -226,6 +236,8 @@ public struct SlotContextMenuInput: Equatable, Sendable {
         self.isHidden = isHidden
         self.bundleIdentifier = bundleIdentifier
         self.isSelfApplication = isSelfApplication
+        self.isTrashSlot = isTrashSlot
+        self.trashIsEmpty = trashIsEmpty
     }
 }
 
@@ -237,7 +249,18 @@ public enum SlotContextMenuBuilder {
         items.append(
             SlotContextMenuItem(id: "open", title: "Open", action: .open)
         )
-        if input.canOpenNewInstance {
+        if input.isTrashSlot {
+            items.append(
+                SlotContextMenuItem(
+                    id: "empty-trash",
+                    title: "Empty Trash",
+                    action: .emptyTrash,
+                    enabled: !input.trashIsEmpty,
+                    isDestructive: true
+                )
+            )
+        }
+        if input.canOpenNewInstance, !input.isTrashSlot {
             items.append(
                 SlotContextMenuItem(
                     id: "open-new",
@@ -280,7 +303,15 @@ public enum SlotContextMenuBuilder {
 
         // Options submenu (Dock-like)
         var options: [SlotContextMenuItem] = []
-        if input.origin == .custom {
+        if input.origin == .trash {
+            options.append(
+                SlotContextMenuItem(
+                    id: "hide-trash",
+                    title: "Hide Trash",
+                    action: .hideTrash
+                )
+            )
+        } else if input.origin == .custom {
             options.append(
                 SlotContextMenuItem(
                     id: "remove",
@@ -381,7 +412,7 @@ public enum SlotContextMenuBuilder {
             )
         )
 
-        if input.isRunning {
+        if input.isRunning, !input.isTrashSlot {
             items.append(.separator(id: "sep-running"))
             if SlotAppMenuPolicy.canShowAllWindows(kind: input.kind, isRunning: true) {
                 items.append(
@@ -811,7 +842,7 @@ public enum KeepAsCustomPolicy {
         path: String,
         customSlots: [Slot]
     ) -> State {
-        guard origin != .custom else { return .unavailable }
+        guard origin != .custom, origin != .trash else { return .unavailable }
         let key = SystemDockEntry.normalizePath(path).lowercased()
         guard !key.isEmpty else { return .unavailable }
         let kept = customSlots.contains {

@@ -13,6 +13,8 @@ The core target owns testable models and policies:
 - running-process identity and transient application tiles.
 - notification badge snapshots and context-menu models.
 - live Calendar date captions (month + day). The executable draws the tile.
+- Finder Trash composition (right-side tile, empty/full state). The
+  executable draws the icon and opens Trash without Automation.
 - reveal state, display geometry, and safe-area planning.
 - single-instance and hotkey-registration policy.
 - reversible system Dock preference snapshots.
@@ -30,6 +32,7 @@ The executable owns operating-system adapters and presentation:
 - optional Accessibility adapters for windows and Dock badges (`AXStatusLabel`
   plus `AXURL` so Messages matches by path, not only by title).
 - a local Calendar date tile. The app does not load `Calendar.docktileplugin`.
+- a local Trash tile (empty/full). The app does not use the Dock trash plugin.
 - explicit AppleScript actions for login-item and Dock compatibility changes.
 - local OSLog diagnostics.
 - a single-instance handoff and deterministic headless self-test.

@@ -18,7 +18,10 @@ public enum DropPathResolver {
     }
 
     /// Resolve a filesystem path, `file://` URL, or http(s) URL into a slot candidate.
-    public static func resolve(_ raw: String) -> Outcome {
+    public static func resolve(
+        _ raw: String,
+        trashPath: String = TrashSlot.canonicalPath()
+    ) -> Outcome {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return .reject("Empty drop") }
 
@@ -30,7 +33,7 @@ public enum DropPathResolver {
                 return .accept(Candidate(label: host, target: trimmed))
             }
             if scheme == "file" {
-                return resolveFilePath(url.path)
+                return resolveFilePath(url.path, trashPath: trashPath)
             }
             return .accept(Candidate(
                 label: url.host?.isEmpty == false ? (url.host ?? scheme) : scheme,
@@ -41,17 +44,20 @@ public enum DropPathResolver {
         // Bare path (possibly with file:// already expanded by pasteboard)
         if trimmed.hasPrefix("/") || trimmed.hasPrefix("~") {
             let expanded = (trimmed as NSString).expandingTildeInPath
-            return resolveFilePath(expanded)
+            return resolveFilePath(expanded, trashPath: trashPath)
         }
 
         return .reject("Unsupported drop (need app, file, or URL)")
     }
 
     /// Resolve multiple pasteboard-style strings; first accept wins, else combined reject.
-    public static func resolveFirst(of candidates: [String]) -> Outcome {
+    public static func resolveFirst(
+        of candidates: [String],
+        trashPath: String = TrashSlot.canonicalPath()
+    ) -> Outcome {
         var lastReject = "Nothing to add"
         for raw in candidates {
-            switch resolve(raw) {
+            switch resolve(raw, trashPath: trashPath) {
             case .accept(let c): return .accept(c)
             case .reject(let r): lastReject = r
             }
@@ -59,7 +65,7 @@ public enum DropPathResolver {
         return .reject(lastReject)
     }
 
-    private static func resolveFilePath(_ path: String) -> Outcome {
+    private static func resolveFilePath(_ path: String, trashPath: String) -> Outcome {
         let normalized = (path as NSString).standardizingPath
         guard !normalized.isEmpty else { return .reject("Empty path") }
 
@@ -108,6 +114,9 @@ public enum DropPathResolver {
         }
 
         if exists {
+            if TrashSlot.matches(path: normalized, canonicalPath: trashPath) {
+                return .accept(Candidate(label: TrashSlot.label, target: normalized))
+            }
             let label = (name as NSString).deletingPathExtension
             return .accept(Candidate(
                 label: label.isEmpty ? name : label,

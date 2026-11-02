@@ -116,7 +116,8 @@ final class SlotDockStore: ObservableObject {
                 system: systemDockEntries,
                 mode: preferences.systemDockIntegration,
                 runningApps: runningSnapshot.apps,
-                includeRunningExtras: preferences.showTransientRunningApps
+                includeRunningExtras: preferences.showTransientRunningApps,
+                includeTrash: preferences.showTrash
             )
         }
     }
@@ -125,6 +126,11 @@ final class SlotDockStore: ObservableObject {
         updatePreferences { $0.showTransientRunningApps = on }
         recomposeDisplay()
         SlotDockTelemetry.preferences.info("showTransientRunningApps=\(on, privacy: .public)")
+    }
+
+    func setShowTrash(_ on: Bool) {
+        updatePreferences { $0.showTrash = on }
+        SlotDockTelemetry.preferences.info("showTrash=\(on, privacy: .public)")
     }
 
     private func afterSlotsChanged() {
@@ -608,7 +614,82 @@ final class SlotDockStore: ObservableObject {
             return hideInstance(instance)
         case .quitInstance:
             return quitInstance(instance)
+        case .emptyTrash:
+            return emptyTrash()
+        case .hideTrash:
+            setShowTrash(false)
+            return true
         }
+    }
+
+    func trashIsEmpty() -> Bool {
+        TrashSlot.isEmpty(at: TrashSlot.liveDirectoryPaths())
+    }
+
+    @discardableResult
+    func emptyTrash() -> Bool {
+        if SlotDockHeadless.isHeadless {
+            lastLaunchError = "Empty Trash is not available in headless mode."
+            return false
+        }
+        let directories = TrashSlot.liveDirectoryPaths()
+        guard !TrashSlot.isEmpty(at: directories) else {
+            lastLaunchError = "Trash is already empty."
+            return false
+        }
+        let alert = NSAlert()
+        alert.messageText = "Are you sure you want to permanently erase the items in the Trash?"
+        alert.informativeText = "You cannot undo this action."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Empty Trash")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return false }
+
+        let items = TrashSlot.itemsToRemove(in: directories)
+        var failed = 0
+        for path in items {
+            do {
+                try FileManager.default.removeItem(atPath: path)
+            } catch {
+                failed += 1
+            }
+        }
+        if failed == 0 {
+            lastLaunchError = nil
+            SlotDockTelemetry.launch.info("Emptied Trash items=\(items.count, privacy: .public)")
+            return true
+        }
+        lastLaunchError = "Could not delete \(failed) item\(failed == 1 ? "" : "s") from Trash."
+        SlotDockTelemetry.launch.error("Empty Trash failed count=\(failed, privacy: .public)")
+        return false
+    }
+
+    @discardableResult
+    func recycleDroppedPaths(_ raws: [String]) -> Bool {
+        let accepted = TrashRecyclePolicy.acceptedPaths(
+            raws,
+            trashDirectories: TrashSlot.liveDirectoryPaths()
+        )
+        guard !accepted.isEmpty else {
+            lastLaunchError = "Nothing to move to Trash."
+            return false
+        }
+        NSWorkspace.shared.recycle(accepted.map { URL(fileURLWithPath: $0) }) { [weak self] _, error in
+            Task { @MainActor in
+                if let error {
+                    self?.lastLaunchError = error.localizedDescription
+                    SlotDockTelemetry.launch.error(
+                        "Trash drop failed \(error.localizedDescription, privacy: .public)"
+                    )
+                } else {
+                    self?.lastLaunchError = nil
+                    SlotDockTelemetry.launch.info(
+                        "Moved \(accepted.count, privacy: .public) item(s) to Trash"
+                    )
+                }
+            }
+        }
+        return true
     }
 
     /// Open-at-login query for menu state (`nil` = unknown / Automation blocked).
@@ -1187,6 +1268,12 @@ final class SlotDockStore: ObservableObject {
            NSWorkspace.shared.urlForApplication(toOpen: payload.url) == nil
         {
             return false
+        }
+        let path = payload.path ?? (payload.url.isFileURL ? payload.url.path : "")
+        if !path.isEmpty, TrashSlot.matches(path: path, canonicalPath: TrashSlot.canonicalPath()) {
+            if NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path) {
+                return true
+            }
         }
         return NSWorkspace.shared.open(payload.url)
     }

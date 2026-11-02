@@ -38,6 +38,7 @@ Launch at login is on in this capture. The product default is off.
 - **Off**: custom slots only
 - Drag an application, file, or URL onto the strip to add a custom slot
 - Right-click a tile for launch, reveal, windows, Get Info, relaunch, and process actions
+- Finder Trash on the right (empty/full icon). Click opens Trash; drop files to recycle
 - Optional running-application dots, notification badges, and transient tiles
 - Optional window safe-area inset so content clears the strip
 - Launch at login is off by default
@@ -92,7 +93,7 @@ You can also use the menu-bar item. The strip can stay open when you pin it.
 The default **Merge** mode places custom slots before applications from the
 system Dock. **Mirror** shows the system Dock applications only. **Off** shows
 custom slots only. Optional transient tiles can show running applications that
-are not otherwise present.
+are not otherwise present. Finder Trash stays on the right unless you hide it.
 
 Configuration is stored in:
 

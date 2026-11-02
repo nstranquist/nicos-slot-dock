@@ -66,6 +66,22 @@ struct DropPathResolverTests {
         #expect(DropPathResolver.resolve(url.path) == .reject("Internet Shortcut is not valid UTF-8: \(url.lastPathComponent)"))
     }
 
+    @Test("trash folder drop is labeled Trash")
+    func trashFolder() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("slot-dock-trash-\(UUID().uuidString)", isDirectory: true)
+        let trash = root.appendingPathComponent(".Trash", isDirectory: true)
+        try FileManager.default.createDirectory(at: trash, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let o = DropPathResolver.resolve(trash.path, trashPath: trash.path)
+        guard case .accept(let c) = o else {
+            Issue.record("expected accept for Trash, got \(o)")
+            return
+        }
+        #expect(c.label == "Trash")
+        #expect(c.target == trash.path)
+    }
+
     @Test("existing app path accepted")
     func appPath() {
         let path = "/System/Applications/Utilities/Terminal.app"

@@ -870,6 +870,12 @@ struct OptionsView: View {
                 ))
                 .disabled(store.preferences.systemDockIntegration != .merge)
 
+                Toggle("Show Trash", isOn: Binding(
+                    get: { store.preferences.showTrash },
+                    set: { store.setShowTrash($0) }
+                ))
+                .help("Show Finder Trash on the right of the strip. Click to open. Drop files to move them to the Trash.")
+
                 Button("Refresh from system Dock") {
                     _ = store.refreshSystemDock()
                 }
@@ -880,7 +886,7 @@ struct OptionsView: View {
             } header: {
                 Text("System Dock apps")
             } footer: {
-                Text("Merge: custom slots left, system Dock apps next (live), open apps on the right. Mirror is Dock-only. Off is custom-only.")
+                Text("Merge: custom slots left, system Dock apps next (live), open apps, then Trash on the right. Mirror is Dock-only plus Trash. Off is custom-only plus Trash.")
                     .font(.system(size: 10))
             }
 

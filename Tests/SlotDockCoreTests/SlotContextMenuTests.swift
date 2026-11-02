@@ -131,6 +131,57 @@ struct SlotContextMenuTests {
         #expect(!model.actionableItems.contains { $0.action == .openNewInstance })
     }
 
+    @Test("composed trash menu opens, empties, and can hide")
+    func trashTile() {
+        let model = SlotContextMenuBuilder.buildSlotMenu(
+            input: SlotContextMenuInput(
+                label: "Trash",
+                origin: .trash,
+                kind: .file,
+                isRunning: false,
+                canOpenNewInstance: false,
+                canImportAsCustom: false,
+                customIndex: nil,
+                customCount: 0,
+                isTrashSlot: true,
+                trashIsEmpty: false
+            )
+        )
+        let actions = Set(model.actionableItems.compactMap(\.action))
+        #expect(actions.contains(.open))
+        #expect(actions.contains(.emptyTrash))
+        #expect(actions.contains(.hideTrash))
+        #expect(actions.contains(.showInFinder))
+        #expect(actions.contains(.getInfo))
+        #expect(!actions.contains(.openNewInstance))
+        #expect(!actions.contains(.importAsCustomSlot))
+        #expect(!actions.contains(.removeFromSlotDock))
+        #expect(!actions.contains(.quitApplication))
+        let empty = model.actionableItems.first { $0.action == .emptyTrash }
+        #expect(empty?.enabled == true)
+        #expect(empty?.isDestructive == true)
+    }
+
+    @Test("empty trash disables Empty Trash")
+    func trashEmptyDisablesEmpty() {
+        let model = SlotContextMenuBuilder.buildSlotMenu(
+            input: SlotContextMenuInput(
+                label: "Trash",
+                origin: .trash,
+                kind: .file,
+                isRunning: false,
+                canOpenNewInstance: false,
+                canImportAsCustom: false,
+                customIndex: nil,
+                customCount: 0,
+                isTrashSlot: true,
+                trashIsEmpty: true
+            )
+        )
+        let empty = model.actionableItems.first { $0.action == .emptyTrash }
+        #expect(empty?.enabled == false)
+    }
+
     @Test("chrome menu exposes pin and refresh")
     func chrome() {
         let model = SlotContextMenuBuilder.buildChromeMenu(

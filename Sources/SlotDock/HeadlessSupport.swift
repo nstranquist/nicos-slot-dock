@@ -50,32 +50,43 @@ enum SlotDockHeadless {
                     let uniqueDisplayIDs = Set(store.displayItems.map(\.id)).count == store.displayItems.count
                     let validOrigins = store.displayItems.allSatisfy { item in
                         switch item.origin {
-                        case .custom, .systemDock, .running: return true
+                        case .custom, .systemDock, .running, .trash: return true
                         }
                     }
                     let compositionValid: Bool = {
                         let customCount = store.displayItems.filter { $0.origin == .custom }.count
                         let systemDisplayCount = store.displayItems.filter { $0.origin == .systemDock }.count
                         let runningDisplayCount = store.displayItems.filter { $0.origin == .running }.count
+                        let trashCount = store.displayItems.filter { $0.origin == .trash }.count
+                        let customHasTrash = store.slots.contains {
+                            TrashSlot.matches(slot: $0, canonicalPath: TrashSlot.canonicalPath())
+                        }
+                        let expectedTrash = store.preferences.showTrash && !customHasTrash ? 1 : 0
                         switch store.preferences.systemDockIntegration {
                         case .off:
                             return validOrigins && uniqueDisplayIDs
                                 && customCount == slotCount
                                 && systemDisplayCount == 0
                                 && runningDisplayCount == 0
-                                && displayCount == slotCount
+                                && trashCount == expectedTrash
+                                && displayCount == slotCount + expectedTrash
                         case .mirror:
                             return validOrigins && uniqueDisplayIDs
                                 && customCount == 0
                                 && runningDisplayCount == 0
                                 && systemDisplayCount == systemCount
-                                && displayCount == systemCount
-                                && store.displayItems.allSatisfy { $0.origin == .systemDock }
+                                && trashCount == expectedTrash
+                                && displayCount == systemCount + expectedTrash
+                                && store.displayItems.allSatisfy {
+                                    $0.origin == .systemDock || $0.origin == .trash
+                                }
                         case .merge:
                             return validOrigins && uniqueDisplayIDs
                                 && customCount == slotCount
                                 && systemDisplayCount == systemCount
-                                && displayCount == customCount + systemDisplayCount + runningDisplayCount
+                                && trashCount == expectedTrash
+                                && displayCount == customCount + systemDisplayCount
+                                    + runningDisplayCount + trashCount
                         }
                     }()
                     let contextMenuValid = Self.contextMenusValid(store: store)
@@ -154,14 +165,22 @@ enum SlotDockHeadless {
                         kind: request.kind,
                         path: request.resolvedTarget
                     ),
-                    canImportAsCustom: item.origin != .custom,
+                    canImportAsCustom: item.origin != .custom && item.origin != .trash,
                     customIndex: item.origin == .custom ? store.customIndex(of: item.slot.id) : nil,
                     customCount: store.slots.count,
                     bundleIdentifier: identity.bundleIdentifier,
-                    isSelfApplication: isSelf
+                    isSelfApplication: isSelf,
+                    isTrashSlot: item.origin == .trash
+                        || TrashSlot.matches(slot: item.slot, canonicalPath: TrashSlot.canonicalPath()),
+                    trashIsEmpty: true
                 )
             )
             guard idle.actionableItems.contains(where: { $0.action == .open }) else { return false }
+            if item.origin == .trash {
+                guard idle.actionableItems.contains(where: { $0.action == .emptyTrash }) else {
+                    return false
+                }
+            }
             if SlotAppMenuPolicy.canGetInfo(kind: request.kind) {
                 guard idle.actionableItems.contains(where: { $0.action == .getInfo }) else {
                     return false
@@ -178,11 +197,14 @@ enum SlotDockHeadless {
                         kind: request.kind,
                         path: request.resolvedTarget
                     ),
-                    canImportAsCustom: item.origin != .custom,
+                    canImportAsCustom: item.origin != .custom && item.origin != .trash,
                     customIndex: item.origin == .custom ? store.customIndex(of: item.slot.id) : nil,
                     customCount: store.slots.count,
                     bundleIdentifier: identity.bundleIdentifier,
-                    isSelfApplication: isSelf
+                    isSelfApplication: isSelf,
+                    isTrashSlot: item.origin == .trash
+                        || TrashSlot.matches(slot: item.slot, canonicalPath: TrashSlot.canonicalPath()),
+                    trashIsEmpty: true
                 )
             )
             let actions = Set(running.actionableItems.compactMap(\.action))

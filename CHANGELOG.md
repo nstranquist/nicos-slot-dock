@@ -4,6 +4,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Show Finder Trash on the right of the strip. The tile uses the empty and
+  full system icons, opens Trash in Finder, accepts dropped files, and
+  offers Empty Trash. Turn it off in Settings → Options.
 - Draw today's month and day on the Calendar tile. Refresh at midnight,
   clock change, and locale change. Icon Services still returns a static
   marketing date; the system Dock tile plugin is not used.

@@ -37,6 +37,7 @@ struct DockPreferencesTests {
         #expect(p.showStatusItem == true)
         #expect(p.showNotificationBadges == true)
         #expect(p.launchAtLogin == false)
+        #expect(p.showTrash == true)
         #expect(p.hotkeys.globalEnabled == false)
         #expect(p.hotkeys.toggleDock.enabled == false)
         #expect(KeyBinding.unbound.displayString == "Off")
@@ -138,6 +139,7 @@ struct DockPreferencesTests {
             return
         }
         #expect(decoded.autoHideLeaveMargin == 8)
+        #expect(decoded.showTrash == true)
 
         // End-to-end policy: expanded + 3pt above strip with margin 2 → leave (do not hold).
         let above3 = CGPoint(x: 300, y: 123)

@@ -227,6 +227,8 @@ public enum SlotComposer {
             case custom
             /// Live running app not already on the strip (ephemeral; opt-in).
             case running
+            /// Finder Trash. Always last, like the system Dock trash tile.
+            case trash
         }
 
         public var id: String { slot.id }
@@ -245,12 +247,17 @@ public enum SlotComposer {
     ///   - mode: off / merge / mirror.
     ///   - runningApps: GUI apps currently running (for optional transient section).
     ///   - includeRunningExtras: when true, append running apps not already on the strip.
+    ///   - includeTrash: when true, append Finder Trash on the right unless a
+    ///     custom/system slot already points at that trash directory.
+    ///   - trashPath: home Trash path used for the composed tile and dedupe.
     public static func compose(
         custom: [Slot],
         system: [SystemDockEntry],
         mode: SystemDockIntegration,
         runningApps: [RunningAppInfo] = [],
-        includeRunningExtras: Bool = false
+        includeRunningExtras: Bool = false,
+        includeTrash: Bool = false,
+        trashPath: String = TrashSlot.canonicalPath()
     ) -> [Item] {
         var items: [Item]
         switch mode {
@@ -329,14 +336,26 @@ public enum SlotComposer {
             )
         }
 
-        guard includeRunningExtras, !runningApps.isEmpty else { return items }
-
-        appendRunning(
-            TransientRunningApps.extras(
-                running: runningApps,
-                stripPaths: stripPaths
+        if includeRunningExtras, !runningApps.isEmpty {
+            appendRunning(
+                TransientRunningApps.extras(
+                    running: runningApps,
+                    stripPaths: stripPaths
+                )
             )
-        )
+        }
+
+        if includeTrash {
+            let already = items.contains {
+                $0.slot.id.compare(TrashSlot.slotID, options: .caseInsensitive) == .orderedSame
+                    || TrashSlot.matches(slot: $0.slot, canonicalPath: trashPath)
+            }
+            if !already {
+                var trash = TrashSlot.slot(path: trashPath, sortOrder: items.count)
+                trash.sortOrder = items.count
+                items.append(Item(slot: trash, origin: .trash))
+            }
+        }
         return items
     }
 

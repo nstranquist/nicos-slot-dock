@@ -40,6 +40,7 @@ struct ConfigMigrationTests {
         #expect(store.preferences.systemDockIntegration == .merge)
         #expect(store.preferences.launchAtLogin == false)
         #expect(store.preferences.showTransientRunningApps == false)
+        #expect(store.preferences.showTrash == true)
         #expect(store.preferences.autoHideDelay >= DockPreferences.minAutoHideDelay)
 
         // Reload from disk — version stayed modern

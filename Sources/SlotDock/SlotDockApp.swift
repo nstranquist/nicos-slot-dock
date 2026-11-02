@@ -538,7 +538,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             for: slot,
             pointSize: 16,
             liveToken: token,
-            calendarIconKey: dockController.badges.calendarIconKey
+            calendarIconKey: dockController.badges.calendarIconKey,
+            trashIconKey: dockController.badges.trashIconKey
         ) {
             return image
         }

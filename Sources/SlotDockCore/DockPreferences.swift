@@ -88,6 +88,8 @@ public struct DockPreferences: Codable, Equatable, Sendable {
     public var showNotificationBadges: Bool
     /// Opt-in: append running GUI apps not already on the strip (event-driven, ephemeral).
     public var showTransientRunningApps: Bool
+    /// Show Finder Trash on the right of the strip (empty/full icon). Default on.
+    public var showTrash: Bool
     /// Opt-in: inset overlapping windows so content clears the Nicos Slot Dock strip.
     public var safeAreaPadding: Bool
     /// Extra points above the strip when safe-area padding is active.
@@ -121,6 +123,7 @@ public struct DockPreferences: Codable, Equatable, Sendable {
         showRunningDots: Bool = true,
         showNotificationBadges: Bool = true,
         showTransientRunningApps: Bool = false,
+        showTrash: Bool = true,
         safeAreaPadding: Bool = false,
         safeAreaExtraGap: Double = 8,
         collisionGuideDismissed: Bool = false,
@@ -148,6 +151,7 @@ public struct DockPreferences: Codable, Equatable, Sendable {
         self.showRunningDots = showRunningDots
         self.showNotificationBadges = showNotificationBadges
         self.showTransientRunningApps = showTransientRunningApps
+        self.showTrash = showTrash
         self.safeAreaPadding = safeAreaPadding
         self.safeAreaExtraGap = Self.clampSafeAreaExtraGap(safeAreaExtraGap)
         self.collisionGuideDismissed = collisionGuideDismissed
@@ -390,6 +394,7 @@ public struct DockPreferences: Codable, Equatable, Sendable {
         showRunningDots = try c.decodeIfPresent(Bool.self, forKey: .showRunningDots) ?? true
         showNotificationBadges = try c.decodeIfPresent(Bool.self, forKey: .showNotificationBadges) ?? true
         showTransientRunningApps = try c.decodeIfPresent(Bool.self, forKey: .showTransientRunningApps) ?? false
+        showTrash = try c.decodeIfPresent(Bool.self, forKey: .showTrash) ?? true
         safeAreaPadding = try c.decodeIfPresent(Bool.self, forKey: .safeAreaPadding) ?? false
         safeAreaExtraGap = try c.decodeIfPresent(Double.self, forKey: .safeAreaExtraGap) ?? 8
         collisionGuideDismissed = try c.decodeIfPresent(Bool.self, forKey: .collisionGuideDismissed) ?? false
@@ -402,7 +407,7 @@ public struct DockPreferences: Codable, Equatable, Sendable {
         case edgeHorizontalOvershoot, revealBaseDuration, iconSpacing
         case showLabels, showIconTooltips, alignment, launchFeedback, hotkeys, showStatusItem, showInFullScreen
         case systemDockIntegration, showSystemDockDivider
-        case showRunningDots, showNotificationBadges, showTransientRunningApps
+        case showRunningDots, showNotificationBadges, showTransientRunningApps, showTrash
         case safeAreaPadding, safeAreaExtraGap, collisionGuideDismissed
         case launchAtLogin
     }

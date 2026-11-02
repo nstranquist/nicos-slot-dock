@@ -40,22 +40,31 @@ enum SlotIconCache {
         for slot: Slot,
         pointSize: CGFloat,
         liveToken: String = "",
-        calendarIconKey: String = ""
+        calendarIconKey: String = "",
+        trashIconKey: String = ""
     ) -> NSImage? {
-        resolved(for: slot, pointSize: pointSize, liveToken: liveToken, calendarIconKey: calendarIconKey)?.image
+        resolved(
+            for: slot,
+            pointSize: pointSize,
+            liveToken: liveToken,
+            calendarIconKey: calendarIconKey,
+            trashIconKey: trashIconKey
+        )?.image
     }
 
     static func resolved(
         for slot: Slot,
         pointSize: CGFloat,
         liveToken: String = "",
-        calendarIconKey: String = ""
+        calendarIconKey: String = "",
+        trashIconKey: String = ""
     ) -> ResolvedSlotIcon? {
         let key = cacheKey(
             slot: slot,
             pointSize: pointSize,
             liveToken: liveToken,
-            calendarIconKey: calendarIconKey
+            calendarIconKey: calendarIconKey,
+            trashIconKey: trashIconKey
         ) as NSString
         box.lock.lock()
         if let hit = box.cache.object(forKey: key) {
@@ -69,7 +78,7 @@ enum SlotIconCache {
         box.lock.unlock()
 
         let resolved = SlotDockTelemetry.measure("icon.resolve", thresholdMS: 12) {
-            resolveUncached(slot: slot, liveToken: liveToken, pointSize: pointSize)
+            resolveUncached(slot: slot, liveToken: liveToken, pointSize: pointSize, trashIconKey: trashIconKey)
                 .map { hintSize($0, pointSize: pointSize) }
         }
         guard let resolved else {
@@ -99,7 +108,8 @@ enum SlotIconCache {
         slot: Slot,
         pointSize: CGFloat,
         liveToken: String,
-        calendarIconKey: String
+        calendarIconKey: String,
+        trashIconKey: String
     ) -> String {
         let icon = slot.iconPath ?? ""
         let calendarKey: String
@@ -108,7 +118,15 @@ enum SlotIconCache {
         } else {
             calendarKey = ""
         }
-        return "\(slot.id)|\(slot.target)|\(icon)|\(liveToken)|\(calendarKey)|\(fileSignature(for: icon))|\(fileSignature(for: slot.target))|\(Int(pointSize * 2))"
+        let trashKey: String
+        if TrashSlot.matches(slot: slot, canonicalPath: TrashSlot.canonicalPath()) {
+            trashKey = trashIconKey.isEmpty
+                ? TrashSlot.iconCacheKey(isEmpty: TrashSlot.isEmpty(at: TrashSlot.liveDirectoryPaths()))
+                : trashIconKey
+        } else {
+            trashKey = ""
+        }
+        return "\(slot.id)|\(slot.target)|\(icon)|\(liveToken)|\(calendarKey)|\(trashKey)|\(fileSignature(for: icon))|\(fileSignature(for: slot.target))|\(Int(pointSize * 2))"
     }
 
     /// Include enough file identity to invalidate an icon when an app or
@@ -128,8 +146,30 @@ enum SlotIconCache {
     private static func resolveUncached(
         slot: Slot,
         liveToken: String,
-        pointSize: CGFloat
+        pointSize: CGFloat,
+        trashIconKey: String
     ) -> ResolvedSlotIcon? {
+        if TrashSlot.matches(slot: slot, canonicalPath: TrashSlot.canonicalPath()) {
+            let empty: Bool
+            if trashIconKey == TrashSlot.iconCacheKey(isEmpty: false) {
+                empty = false
+            } else if trashIconKey == TrashSlot.iconCacheKey(isEmpty: true) {
+                empty = true
+            } else {
+                empty = TrashSlot.isEmpty(at: TrashSlot.liveDirectoryPaths())
+            }
+            let name: NSImage.Name = empty ? NSImage.trashEmptyName : NSImage.trashFullName
+            if let image = NSImage(named: name) {
+                return ResolvedSlotIcon(image: image, appliesMask: false)
+            }
+            let path = LaunchResolver.resolve(slot: slot).resolvedTarget
+            if !path.isEmpty {
+                return ResolvedSlotIcon(
+                    image: NSWorkspace.shared.icon(forFile: path),
+                    appliesMask: false
+                )
+            }
+        }
         if let custom = slot.iconPath, !custom.isEmpty {
             let path = (custom as NSString).expandingTildeInPath
             if let img = NSImage(contentsOfFile: path) {
