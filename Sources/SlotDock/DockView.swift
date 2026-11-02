@@ -75,6 +75,7 @@ struct DockView: View {
                                 ? badges.badge(for: item.slot)
                                 : nil,
                             liveIconToken: badges.liveIconToken(for: item.slot),
+                            calendarIconKey: badges.calendarIconKey,
                             progress: badges.progress(for: item.slot),
                             customIndex: item.origin == .custom
                                 ? store.customIndex(of: item.slot.id)
@@ -351,6 +352,7 @@ struct SlotIconButton: View {
     var showRunningDot: Bool = true
     var badge: DockBadge?
     var liveIconToken: String = ""
+    var calendarIconKey: String = ""
     var progress: Double?
     var customIndex: Int?
     var customCount: Int = 0
@@ -384,7 +386,12 @@ struct SlotIconButton: View {
             ZStack {
                 RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
                     .fill(Color.primary.opacity(hovered || isFlashing || dragHighlight ? 0.12 : 0))
-                SlotIconImage(slot: slot, size: size - 6, liveToken: liveIconToken)
+                SlotIconImage(
+                    slot: slot,
+                    size: size - 6,
+                    liveToken: liveIconToken,
+                    calendarIconKey: calendarIconKey
+                )
                     .frame(width: size - 6, height: size - 6)
                     .allowsHitTesting(false)
                 if let progress, progress > 0, progress < 1 {
@@ -495,6 +502,7 @@ struct SlotIconButton: View {
                 path: slot.target,
                 customSlots: store.slots
             ) == .kept
+        let identity = AppIdentity.from(slot: slot)
         let model = SlotContextMenuBuilder.buildSlotMenu(
             input: SlotContextMenuInput(
                 label: slot.label,
@@ -511,7 +519,12 @@ struct SlotIconButton: View {
                 customCount: customCount,
                 openAtLoginEligible: loginEligible,
                 openAtLoginEnabled: loginEnabled,
-                instances: store.runningInstances(for: slot.id)
+                instances: store.runningInstances(for: slot.id),
+                isHidden: store.isSlotHidden(slotID: slot.id),
+                bundleIdentifier: identity.bundleIdentifier,
+                isSelfApplication: SlotAppMenuPolicy.isSelfApplication(
+                    bundleIdentifier: identity.bundleIdentifier
+                )
             )
         )
         NativeContextMenu.popUp(model: model, with: event, for: view) { action, instance in
@@ -524,10 +537,16 @@ struct SlotIconImage: View {
     let slot: Slot
     let size: CGFloat
     var liveToken: String = ""
+    var calendarIconKey: String = ""
 
     var body: some View {
         Group {
-            if let resolved = SlotIconCache.resolved(for: slot, pointSize: size, liveToken: liveToken) {
+            if let resolved = SlotIconCache.resolved(
+                for: slot,
+                pointSize: size,
+                liveToken: liveToken,
+                calendarIconKey: calendarIconKey
+            ) {
                 Image(nsImage: resolved.image)
                     .resizable()
                     .interpolation(.high)

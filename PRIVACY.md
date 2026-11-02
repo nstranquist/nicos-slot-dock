@@ -26,8 +26,8 @@ the local macOS installation.
 ## Optional permissions
 
 - Accessibility can inspect and move visible windows. It can also read Dock
-  badge labels. The app uses it only for an enabled feature or an existing
-  authorization.
+  badge labels and the local file URL of a Dock tile. The app uses it only
+  for an enabled feature or an existing authorization.
 - Automation can control System Events for explicit login-item and Dock
   compatibility actions. The app asks at the time of the action.
 - Launch at login is off by default.

@@ -7,7 +7,8 @@ import SlotDockCore
 ///
 /// Launch Services `StatusLabel` is the same source `lsappinfo` exposes and does
 /// not need Accessibility. Messages / WhatsApp often omit that key; when the
-/// process is already trusted we fill those holes from Dock `AXStatusLabel`.
+/// process is already trusted we fill those holes from Dock `AXStatusLabel`
+/// plus `AXURL` (path/bundle match, not title-only).
 ///
 /// There is no public badge-changed notification, so a 1s timer is the honest
 /// refresh path. Reads are coalesced and publish only on change.
@@ -16,16 +17,24 @@ final class DockBadgeMonitor: ObservableObject {
     @Published private(set) var snapshot = DockBadgeSnapshot.empty
     /// Canonical app path → sidecar token (`chatgpt`, `codex-dark`, …).
     @Published private(set) var liveIconTokens: [String: String] = [:]
+    /// Date+locale key so Calendar tiles redraw at midnight without a relaunch.
+    @Published private(set) var calendarIconKey = CalendarDockIcon.iconCacheKey()
+
+    /// Prompt for Accessibility when Messages/WhatsApp badges need Dock AX.
+    var onRequestAccessibility: (() -> Void)?
 
     private var timer: Timer?
-    private var appearanceObserver: NSObjectProtocol?
+    private var observers: [NSObjectProtocol] = []
     private var running = false
     private var collectBadges = true
-    private var lastAXByTitle: [String: DockBadge] = [:]
+    private var lastAXEntries: [DockAXBadgeEntry] = []
     private var axRefreshCounter = 0
     private var refreshCount = 0
     private var publishCount = 0
+    private var didPromptAccessibility = false
+    private var stripIdentities: [AppIdentity] = []
     private let interval: TimeInterval = 1.0
+    private static let accessibilityPromptDefaultsKey = "badgeAccessibilityPrompted"
 
     /// Always-on live icon tokens (ChatGPT ↔ Codex). Badge collection is optional.
     func start() {
@@ -33,18 +42,19 @@ final class DockBadgeMonitor: ObservableObject {
         running = true
         refresh(reason: "start")
         startTimer()
-        startAppearanceObserver()
+        startObservers()
     }
 
     func setCollectBadges(_ on: Bool) {
         let changed = collectBadges != on
         collectBadges = on
         if !on {
-            lastAXByTitle = [:]
+            lastAXEntries = []
             if snapshot != .empty { snapshot = .empty }
         }
         if running, changed {
             refresh(reason: on ? "badges-on" : "badges-off")
+            if on { requestAccessibilityIfNeeded() }
         }
     }
 
@@ -61,8 +71,8 @@ final class DockBadgeMonitor: ObservableObject {
         running = false
         collectBadges = false
         stopTimer()
-        stopAppearanceObserver()
-        lastAXByTitle = [:]
+        stopObservers()
+        lastAXEntries = []
         if snapshot != .empty { snapshot = .empty }
         if !liveIconTokens.isEmpty { liveIconTokens = [:] }
         SlotDockTelemetry.badge.info("DockBadgeMonitor stopped")
@@ -77,13 +87,13 @@ final class DockBadgeMonitor: ObservableObject {
             let includeAX = axRefreshCounter % 3 == 1
             next = SlotDockTelemetry.measure("badge.refresh", thresholdMS: 12) {
                 if includeAX {
-                    lastAXByTitle = AXIsProcessTrusted() ? DockAXBadges.byTitle() : [:]
+                    lastAXEntries = AXIsProcessTrusted() ? DockAXBadges.entries() : []
                 } else if !AXIsProcessTrusted() {
-                    lastAXByTitle = [:]
+                    lastAXEntries = []
                 }
                 return DockBadgeMerge.merging(
                     launchServices: LaunchServicesBadges.snapshot(),
-                    accessibilityByTitle: lastAXByTitle
+                    accessibility: lastAXEntries
                 )
             }
         } else {
@@ -101,6 +111,16 @@ final class DockBadgeMonitor: ObservableObject {
             liveIconTokens = tokens
             changed = true
         }
+        let nextCalendarKey = CalendarDockIcon.iconCacheKey()
+        if nextCalendarKey != calendarIconKey {
+            calendarIconKey = nextCalendarKey
+            SlotIconCache.invalidateAll()
+            changed = true
+            SlotDockTelemetry.iconCache.info(
+                "calendar icon key=\(nextCalendarKey, privacy: .public)"
+            )
+        }
+        requestAccessibilityIfNeeded()
         if changed {
             publishCount += 1
             if publishCount == 1 || publishCount % 10 == 0 {
@@ -124,6 +144,11 @@ final class DockBadgeMonitor: ObservableObject {
         snapshot.progress(for: slot)
     }
 
+    func noteStripIdentities(_ identities: [AppIdentity]) {
+        stripIdentities = identities
+        requestAccessibilityIfNeeded()
+    }
+
     private func startTimer() {
         stopTimer()
         let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
@@ -141,24 +166,51 @@ final class DockBadgeMonitor: ObservableObject {
         timer = nil
     }
 
-    private func startAppearanceObserver() {
-        stopAppearanceObserver()
-        appearanceObserver = DistributedNotificationCenter.default().addObserver(
-            forName: Notification.Name("AppleInterfaceThemeChangedNotification"),
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                self?.refresh(reason: "appearance")
+    private func startObservers() {
+        stopObservers()
+        func observe(_ name: Notification.Name, center: NotificationCenter = .default, reason: String) {
+            let token = center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor in
+                    self?.refresh(reason: reason)
+                }
             }
+            observers.append(token)
         }
+        observe(
+            Notification.Name("AppleInterfaceThemeChangedNotification"),
+            center: DistributedNotificationCenter.default(),
+            reason: "appearance"
+        )
+        observe(.NSCalendarDayChanged, reason: "calendar-day")
+        observe(.NSSystemClockDidChange, reason: "clock")
+        observe(NSLocale.currentLocaleDidChangeNotification, reason: "locale")
     }
 
-    private func stopAppearanceObserver() {
-        if let appearanceObserver {
-            DistributedNotificationCenter.default().removeObserver(appearanceObserver)
-            self.appearanceObserver = nil
+    private func stopObservers() {
+        let center = NotificationCenter.default
+        let distributed = DistributedNotificationCenter.default()
+        for observer in observers {
+            center.removeObserver(observer)
+            distributed.removeObserver(observer)
         }
+        observers.removeAll()
+    }
+
+    private func requestAccessibilityIfNeeded() {
+        guard running, collectBadges, !didPromptAccessibility else { return }
+        guard !SlotDockHeadless.isHeadless else { return }
+        guard !AXIsProcessTrusted() else { return }
+        let runningIDs = NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier)
+        guard DockBadgeAXFill.shouldRequestAccessibility(
+            stripIdentities: stripIdentities,
+            runningBundleIDs: runningIDs
+        ) else { return }
+        let defaults = UserDefaults.standard
+        if defaults.bool(forKey: Self.accessibilityPromptDefaultsKey) { return }
+        didPromptAccessibility = true
+        defaults.set(true, forKey: Self.accessibilityPromptDefaultsKey)
+        SlotDockTelemetry.badge.info("requesting Accessibility for Messages/WhatsApp Dock badges")
+        onRequestAccessibility?()
     }
 
 }
@@ -239,30 +291,61 @@ enum LaunchServicesBadges {
 // MARK: - Dock AXStatusLabel (trusted processes only)
 
 enum DockAXBadges {
-    static func byTitle() -> [String: DockBadge] {
-        guard AXIsProcessTrusted() else { return [:] }
+    static func entries() -> [DockAXBadgeEntry] {
+        guard AXIsProcessTrusted() else { return [] }
         let docks = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock")
-        guard let dock = docks.first, !dock.isTerminated else { return [:] }
+        guard let dock = docks.first, !dock.isTerminated else { return [] }
 
         let app = AXUIElementCreateApplication(dock.processIdentifier)
-        guard let list = firstChild(of: app, role: "AXList") else { return [:] }
+        guard let list = firstChild(of: app, role: "AXList") else { return [] }
         guard let children = copyAttribute(list, kAXChildrenAttribute as String) as? [AXUIElement] else {
-            return [:]
+            return []
         }
 
-        var out: [String: DockBadge] = [:]
+        var out: [DockAXBadgeEntry] = []
         for item in children {
             let role = copyAttribute(item, kAXRoleAttribute as String) as? String
             guard role == "AXDockItem" || role == nil else { continue }
+            let subrole = copyAttribute(item, kAXSubroleAttribute as String) as? String
+            if subrole == "AXSeparatorDockItem" || subrole == "AXTrashDockItem" { continue }
             guard let title = copyAttribute(item, kAXTitleAttribute as String) as? String,
                   !title.isEmpty
             else { continue }
             let raw = copyAttribute(item, "AXStatusLabel")
-            if let badge = DockBadgeParser.parseStatusLabel(raw) {
-                out[title] = badge
-            }
+            guard let badge = DockBadgeParser.parseStatusLabel(raw) else { continue }
+            let path = appPath(from: copyAttribute(item, kAXURLAttribute as String))
+            let bundle = path.flatMap { AppIdentity.bundleIdentifier(forAppPath: $0) }
+            out.append(
+                DockAXBadgeEntry(
+                    title: title,
+                    path: path,
+                    bundleIdentifier: bundle,
+                    badge: badge
+                )
+            )
         }
         return out
+    }
+
+    private static func appPath(from raw: Any?) -> String? {
+        let path: String?
+        if let url = raw as? URL {
+            path = url.path
+        } else if let url = raw as? NSURL {
+            path = url.path
+        } else if let string = raw as? String {
+            if string.hasPrefix("file://"), let url = URL(string: string) {
+                path = url.path
+            } else {
+                path = string
+            }
+        } else {
+            path = nil
+        }
+        guard let path, !path.isEmpty else { return nil }
+        let canonical = SystemDockEntry.canonicalIdentityPath(path)
+        guard canonical.lowercased().hasSuffix(".app") else { return nil }
+        return canonical
     }
 
     private static func firstChild(of element: AXUIElement, role: String) -> AXUIElement? {
@@ -334,5 +417,18 @@ enum DockAXWindowTitles {
         else { return false }
         let error = AXUIElementPerformAction(listed[index].element, kAXRaiseAction as CFString)
         return error == .success
+    }
+
+    @MainActor
+    @discardableResult
+    static func raiseAll(app: NSRunningApplication) -> Bool {
+        let listed = windows(for: app)
+        var any = false
+        for window in listed {
+            if AXUIElementPerformAction(window.element, kAXRaiseAction as CFString) == .success {
+                any = true
+            }
+        }
+        return any
     }
 }

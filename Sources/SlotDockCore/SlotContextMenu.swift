@@ -7,7 +7,13 @@ public enum SlotContextAction: String, Equatable, Sendable {
     case showInFinder
     case copyPath
     case copyLabel
+    case copyBundleIdentifier
+    case getInfo
+    case showAllWindows
     case hideApplication
+    case unhideApplication
+    case hideOthers
+    case relaunchApplication
     case quitApplication
     case forceQuitApplication
     case removeFromSlotDock
@@ -143,6 +149,24 @@ public struct SlotContextMenuModel: Equatable, Sendable {
             return item.action != nil ? [item] : []
         }
     }
+
+    /// Stable outline for snapshot tests (separators, headers, one submenu level).
+    public var titleOutline: [String] {
+        items.flatMap { item -> [String] in
+            if item.isSeparator { return ["---"] }
+            if item.isHeader { return ["# \(item.title)"] }
+            if !item.children.isEmpty {
+                let kids = item.children.map { child in
+                    if child.isSeparator { return "  ---" }
+                    let suffix = child.enabled ? "" : " [off]"
+                    return "  \(child.title)\(suffix)"
+                }
+                return ["\(item.title)/"] + kids
+            }
+            let suffix = item.enabled ? "" : " [off]"
+            return ["\(item.title)\(suffix)"]
+        }
+    }
 }
 
 /// Inputs for building a per-slot menu (pure).
@@ -163,6 +187,12 @@ public struct SlotContextMenuInput: Equatable, Sendable {
     public var openAtLoginEnabled: Bool?
     /// Live processes / windows for this slot (targeted hide/show/quit).
     public var instances: [SlotInstanceRef]
+    /// True when every matching process is hidden.
+    public var isHidden: Bool
+    /// Bundle identifier when known (Copy Bundle ID).
+    public var bundleIdentifier: String?
+    /// True when this tile is Nicos Slot Dock itself (no self-relaunch).
+    public var isSelfApplication: Bool
 
     public init(
         label: String,
@@ -176,7 +206,10 @@ public struct SlotContextMenuInput: Equatable, Sendable {
         customCount: Int,
         openAtLoginEligible: Bool = false,
         openAtLoginEnabled: Bool? = nil,
-        instances: [SlotInstanceRef] = []
+        instances: [SlotInstanceRef] = [],
+        isHidden: Bool = false,
+        bundleIdentifier: String? = nil,
+        isSelfApplication: Bool = false
     ) {
         self.label = label
         self.origin = origin
@@ -190,6 +223,9 @@ public struct SlotContextMenuInput: Equatable, Sendable {
         self.openAtLoginEligible = openAtLoginEligible
         self.openAtLoginEnabled = openAtLoginEnabled
         self.instances = instances
+        self.isHidden = isHidden
+        self.bundleIdentifier = bundleIdentifier
+        self.isSelfApplication = isSelfApplication
     }
 }
 
@@ -221,12 +257,26 @@ public enum SlotContextMenuBuilder {
                 enabled: input.kind != .url
             )
         )
+        if SlotAppMenuPolicy.canGetInfo(kind: input.kind) {
+            items.append(
+                SlotContextMenuItem(id: "get-info", title: "Get Info", action: .getInfo)
+            )
+        }
         items.append(
             SlotContextMenuItem(id: "copy-path", title: "Copy Path", action: .copyPath)
         )
         items.append(
             SlotContextMenuItem(id: "copy-label", title: "Copy Name", action: .copyLabel)
         )
+        if SlotAppMenuPolicy.canCopyBundleIdentifier(input.bundleIdentifier) {
+            items.append(
+                SlotContextMenuItem(
+                    id: "copy-bundle",
+                    title: "Copy Bundle ID",
+                    action: .copyBundleIdentifier
+                )
+            )
+        }
 
         // Options submenu (Dock-like)
         var options: [SlotContextMenuItem] = []
@@ -333,9 +383,48 @@ public enum SlotContextMenuBuilder {
 
         if input.isRunning {
             items.append(.separator(id: "sep-running"))
-            items.append(
-                SlotContextMenuItem(id: "hide", title: "Hide", action: .hideApplication)
-            )
+            if SlotAppMenuPolicy.canShowAllWindows(kind: input.kind, isRunning: true) {
+                items.append(
+                    SlotContextMenuItem(
+                        id: "show-all-windows",
+                        title: "Show All Windows",
+                        action: .showAllWindows
+                    )
+                )
+            }
+            if input.isHidden {
+                items.append(
+                    SlotContextMenuItem(id: "show", title: "Show", action: .unhideApplication)
+                )
+            } else {
+                items.append(
+                    SlotContextMenuItem(id: "hide", title: "Hide", action: .hideApplication)
+                )
+            }
+            if SlotAppMenuPolicy.canHideOthers(kind: input.kind, isRunning: true) {
+                items.append(
+                    SlotContextMenuItem(
+                        id: "hide-others",
+                        title: "Hide Others",
+                        action: .hideOthers
+                    )
+                )
+            }
+            items.append(contentsOf: instanceMenuItems(input.instances))
+            items.append(.separator(id: "sep-process"))
+            if SlotAppMenuPolicy.canRelaunch(
+                kind: input.kind,
+                isRunning: true,
+                isSelf: input.isSelfApplication
+            ) {
+                items.append(
+                    SlotContextMenuItem(
+                        id: "relaunch",
+                        title: "Relaunch",
+                        action: .relaunchApplication
+                    )
+                )
+            }
             items.append(
                 SlotContextMenuItem(id: "quit", title: "Quit", action: .quitApplication)
             )
@@ -347,7 +436,6 @@ public enum SlotContextMenuBuilder {
                     isDestructive: true
                 )
             )
-            items.append(contentsOf: instanceMenuItems(input.instances))
         }
 
         items.append(.separator(id: "sep-settings"))
@@ -455,6 +543,43 @@ public enum SlotContextMenuBuilder {
             )
         }
         return items
+    }
+}
+
+// MARK: - App tile menu policy (pure)
+
+/// Eligibility for application-tile actions. No AppKit.
+public enum SlotAppMenuPolicy {
+    public static func canShowAllWindows(kind: LaunchRequest.Kind, isRunning: Bool) -> Bool {
+        isRunning && kind == .application
+    }
+
+    public static func canHideOthers(kind: LaunchRequest.Kind, isRunning: Bool) -> Bool {
+        isRunning && kind == .application
+    }
+
+    public static func canRelaunch(kind: LaunchRequest.Kind, isRunning: Bool, isSelf: Bool) -> Bool {
+        isRunning && kind == .application && !isSelf
+    }
+
+    public static func canGetInfo(kind: LaunchRequest.Kind) -> Bool {
+        kind == .application || kind == .file
+    }
+
+    public static func canCopyBundleIdentifier(_ bundleIdentifier: String?) -> Bool {
+        guard let id = bundleIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines) else {
+            return false
+        }
+        return !id.isEmpty
+    }
+
+    public static func isSelfApplication(bundleIdentifier: String?) -> Bool {
+        guard let bundle = bundleIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !bundle.isEmpty
+        else {
+            return false
+        }
+        return bundle.caseInsensitiveCompare(SlotDockProcessIdentity.bundleIdentifier) == .orderedSame
     }
 }
 

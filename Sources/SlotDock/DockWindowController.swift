@@ -761,12 +761,19 @@ struct DockChrome: View {
         .onAppear {
             _ = store.refreshSystemDock()
             runningApps.refresh()
+            badges.onRequestAccessibility = {
+                NotificationCenter.default.post(name: .slotDockRequestAccessibility, object: nil)
+            }
             badges.start()
             badges.setCollectBadges(store.preferences.showNotificationBadges)
+            badges.noteStripIdentities(store.displayItems.map { AppIdentity.from(slot: $0.slot) })
             controller?.syncSafeArea()
         }
         .onChange(of: store.preferences.showNotificationBadges) { _, on in
             badges.setCollectBadges(on)
+        }
+        .onChange(of: store.displayItems.map(\.slot.id)) { _, _ in
+            badges.noteStripIdentities(store.displayItems.map { AppIdentity.from(slot: $0.slot) })
         }
         .onChange(of: store.reveal.phase) { _, phase in
             // Controls menu / store-only phase flips: coalesce with any explicit request.

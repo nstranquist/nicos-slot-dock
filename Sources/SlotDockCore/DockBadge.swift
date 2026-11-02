@@ -229,6 +229,54 @@ public enum DockIconSidecar {
     }
 }
 
+/// One Dock Accessibility tile with a badge. Path/bundle come from `AXURL`.
+public struct DockAXBadgeEntry: Equatable, Sendable {
+    public var title: String
+    public var path: String?
+    public var bundleIdentifier: String?
+    public var badge: DockBadge
+
+    public init(title: String, path: String? = nil, bundleIdentifier: String? = nil, badge: DockBadge) {
+        self.title = title
+        self.path = path
+        self.bundleIdentifier = bundleIdentifier
+        self.badge = badge
+    }
+}
+
+/// Apps that often omit Launch Services `StatusLabel` and need Dock AX fill.
+public enum DockBadgeAXFill {
+    public static let holeBundleIdentifiers: Set<String> = [
+        "com.apple.mobilesms",
+        "net.whatsapp.whatsapp",
+        "net.whatsapp.whatsappdesktop",
+    ]
+
+    public static func isHoleApp(bundleIdentifier: String?, path: String? = nil) -> Bool {
+        if let bundleIdentifier, holeBundleIdentifiers.contains(bundleIdentifier.lowercased()) {
+            return true
+        }
+        guard let path else { return false }
+        let name = URL(fileURLWithPath: SystemDockEntry.canonicalIdentityPath(path))
+            .deletingPathExtension()
+            .lastPathComponent
+            .lowercased()
+        return name == "messages" || name == "whatsapp"
+    }
+
+    public static func shouldRequestAccessibility(
+        stripIdentities: [AppIdentity],
+        runningBundleIDs: [String]
+    ) -> Bool {
+        if runningBundleIDs.contains(where: { holeBundleIdentifiers.contains($0.lowercased()) }) {
+            return true
+        }
+        return stripIdentities.contains {
+            isHoleApp(bundleIdentifier: $0.bundleIdentifier, path: $0.path)
+        }
+    }
+}
+
 public enum DockBadgeMerge {
     /// Launch Services is authoritative when it publishes a label; AX titles fill holes
     /// (Messages / WhatsApp often omit `StatusLabel`).
@@ -236,16 +284,40 @@ public enum DockBadgeMerge {
         launchServices: DockBadgeSnapshot,
         accessibilityByTitle: [String: DockBadge]
     ) -> DockBadgeSnapshot {
+        merging(
+            launchServices: launchServices,
+            accessibility: accessibilityByTitle.map {
+                DockAXBadgeEntry(title: $0.key, badge: $0.value)
+            }
+        )
+    }
+
+    /// AX `AXURL` also fills path/bundle so a slot labeled "iMessage" still matches.
+    public static func merging(
+        launchServices: DockBadgeSnapshot,
+        accessibility: [DockAXBadgeEntry]
+    ) -> DockBadgeSnapshot {
         var titles = launchServices.byTitle
-        for (key, badge) in accessibilityByTitle {
-            let lowered = key.lowercased()
-            if titles[lowered] == nil {
-                titles[lowered] = badge
+        var paths = launchServices.byPath
+        var bundles = launchServices.byBundle
+        for entry in accessibility {
+            let titleKey = entry.title.lowercased()
+            if !titleKey.isEmpty, titles[titleKey] == nil {
+                titles[titleKey] = entry.badge
+            }
+            if let path = entry.path {
+                let key = SystemDockEntry.canonicalIdentityPath(path).lowercased()
+                if !key.isEmpty, paths[key] == nil {
+                    paths[key] = entry.badge
+                }
+            }
+            if let bundle = entry.bundleIdentifier?.lowercased(), !bundle.isEmpty, bundles[bundle] == nil {
+                bundles[bundle] = entry.badge
             }
         }
         return DockBadgeSnapshot(
-            byBundle: launchServices.byBundle,
-            byPath: launchServices.byPath,
+            byBundle: bundles,
+            byPath: paths,
             byTitle: titles,
             progressByBundle: launchServices.progressByBundle,
             progressByPath: launchServices.progressByPath

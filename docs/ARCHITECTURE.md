@@ -12,6 +12,7 @@ The core target owns testable models and policies:
 - system Dock parsing and merge/mirror/off composition.
 - running-process identity and transient application tiles.
 - notification badge snapshots and context-menu models.
+- live Calendar date captions (month + day). The executable draws the tile.
 - reveal state, display geometry, and safe-area planning.
 - single-instance and hotkey-registration policy.
 - reversible system Dock preference snapshots.
@@ -26,7 +27,9 @@ The executable owns operating-system adapters and presentation:
 - an AppKit floating panel containing the SwiftUI strip and settings UI.
 - workspace notifications for application launch and termination.
 - an FSEvents-backed watcher for system Dock preference changes.
-- optional Accessibility adapters for windows and Dock badges.
+- optional Accessibility adapters for windows and Dock badges (`AXStatusLabel`
+  plus `AXURL` so Messages matches by path, not only by title).
+- a local Calendar date tile. The app does not load `Calendar.docktileplugin`.
 - explicit AppleScript actions for login-item and Dock compatibility changes.
 - local OSLog diagnostics.
 - a single-instance handoff and deterministic headless self-test.
@@ -43,6 +46,11 @@ symbols, Dock plist access, and application icons.
 The private Launch Services adapter dynamically resolves symbols. If symbols
 are absent, it returns an empty result. It is isolated to badge and application
 metadata. A future Mac App Store build must replace or remove this adapter.
+
+Show All Windows first activates the target application and raises known
+windows. It then sends `CoreDockSendNotification` for App Exposé when that
+symbol is present. If the symbol is missing, the activate-and-raise path
+still runs.
 
 ## Build products
 

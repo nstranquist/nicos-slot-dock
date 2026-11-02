@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import SlotDockCore
 import SwiftUI
 import UniformTypeIdentifiers
@@ -700,6 +701,21 @@ struct OptionsView: View {
     @ObservedObject var store: SlotDockStore
     @State private var confirmReset = false
 
+    private var accessibilityStatusText: String {
+        if AXIsProcessTrusted() {
+            return "Accessibility is on."
+        }
+        let badges = store.preferences.showNotificationBadges
+        let safeArea = store.preferences.safeAreaPadding
+        if badges && safeArea {
+            return "Accessibility is off. Turn it on for Messages badges and window padding."
+        }
+        if badges {
+            return "Accessibility is off. Messages and WhatsApp badges need it."
+        }
+        return "Accessibility is off. Window padding needs it."
+    }
+
     var body: some View {
         Form {
             Section {
@@ -879,7 +895,7 @@ struct OptionsView: View {
                     get: { store.preferences.showNotificationBadges },
                     set: { store.setShowNotificationBadges($0) }
                 ))
-                .help("Red counts on strip icons, matching the Mac Dock. Messages/WhatsApp may need Accessibility if Launch Services does not publish a badge.")
+                .help("Red counts on strip icons, matching the Mac Dock. Messages and WhatsApp need Accessibility.")
 
                 Toggle("Window safe-area padding", isOn: Binding(
                     get: { store.preferences.safeAreaPadding },
@@ -899,15 +915,22 @@ struct OptionsView: View {
                         step: 1,
                         helpText: "Extra points above the strip when safe-area padding is active."
                     )
+                }
+
+                if store.preferences.showNotificationBadges || store.preferences.safeAreaPadding {
+                    Text(accessibilityStatusText)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                     Button("Request Accessibility…") {
                         NotificationCenter.default.post(name: .slotDockRequestAccessibility, object: nil)
                     }
-                    .help("Required for live window padding")
+                    .help("Messages and WhatsApp badges read Dock tile labels. Window padding moves overlapping windows.")
                 }
             } header: {
                 Text("Strip & windows")
             } footer: {
-                Text("Safe-area applies when the strip is pinned or expanded; turning it off restores only tracked windows.")
+                Text("Keep Messages on the strip (custom slot or system Dock) to show a badge while it is quit. Safe-area applies when the strip is pinned or expanded.")
                     .font(.system(size: 10))
             }
 

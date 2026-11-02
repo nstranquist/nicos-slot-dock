@@ -62,6 +62,15 @@ enum NativeContextMenu {
         if item.isOn {
             ns.state = .on
         }
+        if item.isDestructive {
+            ns.attributedTitle = NSAttributedString(
+                string: item.title,
+                attributes: [
+                    .foregroundColor: NSColor.systemRed,
+                    .font: NSFont.menuFont(ofSize: 0),
+                ]
+            )
+        }
         if let action = item.action {
             let target = ActionTarget(action: action, instance: item.instance, handler: onAction)
             ns.representedObject = target

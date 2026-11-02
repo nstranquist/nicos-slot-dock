@@ -57,11 +57,13 @@ fi
 ok=$(/usr/bin/plutil -extract ok raw -expect bool "$REPORT")
 settings_valid=$(/usr/bin/plutil -extract settings_valid raw -expect bool "$REPORT")
 composition_valid=$(/usr/bin/plutil -extract composition_valid raw -expect bool "$REPORT")
+context_menu_valid=$(/usr/bin/plutil -extract context_menu_valid raw -expect bool "$REPORT")
 app=$(/usr/bin/plutil -extract app raw -expect string "$REPORT")
 reveal_phase=$(/usr/bin/plutil -extract reveal_phase raw -expect string "$REPORT")
 [[ "$app" == "nicos-slot-dock" ]]
 [[ "$ok" == "true" ]]
 [[ "$settings_valid" == "true" ]]
 [[ "$composition_valid" == "true" ]]
+[[ "$context_menu_valid" == "true" ]]
 [[ "$reveal_phase" == "expanded" ]]
 echo "headless smoke ok"

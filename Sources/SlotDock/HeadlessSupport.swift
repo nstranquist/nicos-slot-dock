@@ -1,6 +1,7 @@
 import AppKit
 import Darwin
 import Foundation
+import SlotDockCore
 
 @MainActor
 enum SlotDockHeadless {
@@ -77,11 +78,13 @@ enum SlotDockHeadless {
                                 && displayCount == customCount + systemDisplayCount + runningDisplayCount
                         }
                     }()
+                    let contextMenuValid = Self.contextMenusValid(store: store)
                     let ok = dockVisible
                         && phase == "expanded"
                         && store.reveal.progress >= 0.99
                         && settingsValid
                         && compositionValid
+                        && contextMenuValid
 
                     let payload: [String: Any] = [
                         "ok": ok,
@@ -96,6 +99,7 @@ enum SlotDockHeadless {
                         "settings_tab": store.settingsTab.rawValue,
                         "settings_valid": settingsValid,
                         "composition_valid": compositionValid,
+                        "context_menu_valid": contextMenuValid,
                         "icon_size": store.preferences.iconSize.rawValue,
                         "app": "nicos-slot-dock",
                     ]
@@ -127,5 +131,68 @@ enum SlotDockHeadless {
                 }
             }
         }
+    }
+
+    /// Build idle and running menus for strip tiles. Fail if Open / Get Info /
+    /// Show All Windows / Hide Others / Relaunch are missing when required.
+    static func contextMenusValid(store: SlotDockStore) -> Bool {
+        let items = store.displayItems
+        if items.isEmpty { return true }
+        for item in items.prefix(12) {
+            let request = LaunchResolver.resolve(slot: item.slot)
+            let identity = AppIdentity.from(slot: item.slot)
+            let isSelf = SlotAppMenuPolicy.isSelfApplication(
+                bundleIdentifier: identity.bundleIdentifier
+            )
+            let idle = SlotContextMenuBuilder.buildSlotMenu(
+                input: SlotContextMenuInput(
+                    label: item.slot.label,
+                    origin: item.origin,
+                    kind: request.kind,
+                    isRunning: false,
+                    canOpenNewInstance: SlotContextMenuBuilder.canOpenNewInstance(
+                        kind: request.kind,
+                        path: request.resolvedTarget
+                    ),
+                    canImportAsCustom: item.origin != .custom,
+                    customIndex: item.origin == .custom ? store.customIndex(of: item.slot.id) : nil,
+                    customCount: store.slots.count,
+                    bundleIdentifier: identity.bundleIdentifier,
+                    isSelfApplication: isSelf
+                )
+            )
+            guard idle.actionableItems.contains(where: { $0.action == .open }) else { return false }
+            if SlotAppMenuPolicy.canGetInfo(kind: request.kind) {
+                guard idle.actionableItems.contains(where: { $0.action == .getInfo }) else {
+                    return false
+                }
+            }
+            guard request.kind == .application else { continue }
+            let running = SlotContextMenuBuilder.buildSlotMenu(
+                input: SlotContextMenuInput(
+                    label: item.slot.label,
+                    origin: item.origin,
+                    kind: request.kind,
+                    isRunning: true,
+                    canOpenNewInstance: SlotContextMenuBuilder.canOpenNewInstance(
+                        kind: request.kind,
+                        path: request.resolvedTarget
+                    ),
+                    canImportAsCustom: item.origin != .custom,
+                    customIndex: item.origin == .custom ? store.customIndex(of: item.slot.id) : nil,
+                    customCount: store.slots.count,
+                    bundleIdentifier: identity.bundleIdentifier,
+                    isSelfApplication: isSelf
+                )
+            )
+            let actions = Set(running.actionableItems.compactMap(\.action))
+            guard actions.contains(.showAllWindows), actions.contains(.hideOthers) else {
+                return false
+            }
+            if !isSelf {
+                guard actions.contains(.relaunchApplication) else { return false }
+            }
+        }
+        return true
     }
 }

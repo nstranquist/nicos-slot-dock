@@ -112,6 +112,92 @@ struct DockBadgeTests {
         #expect(merged.byTitle["messages"]?.count == 1)
     }
 
+    @Test("AX path and bundle match slots even when the label is iMessage")
+    func mergeAXPathAndBundle() {
+        let ls = DockBadgeSnapshot(
+            byBundle: ["com.tinyspeck.slackmacgap": DockBadge(kind: .count(2), rawLabel: "2")]
+        )
+        let entries = [
+            DockAXBadgeEntry(
+                title: "Messages",
+                path: "/System/Applications/Messages.app",
+                bundleIdentifier: "com.apple.MobileSMS",
+                badge: DockBadge(kind: .count(3), rawLabel: "3")
+            ),
+        ]
+        let merged = DockBadgeMerge.merging(launchServices: ls, accessibility: entries)
+        #expect(merged.byBundle["com.tinyspeck.slackmacgap"]?.count == 2)
+        #expect(merged.byBundle["com.apple.mobilesms"]?.count == 3)
+        #expect(merged.byTitle["messages"]?.count == 3)
+        let labeledIMessage = Slot(
+            id: "custom-msg",
+            label: "iMessage",
+            target: "/System/Applications/Messages.app"
+        )
+        #expect(merged.badge(for: labeledIMessage)?.count == 3)
+    }
+
+    @Test("Launch Services keeps a path badge when AX also publishes one")
+    func launchServicesWinsOverAX() {
+        let ls = DockBadgeSnapshot(
+            byPath: [
+                "/System/Applications/Messages.app": DockBadge(kind: .count(1), rawLabel: "1"),
+            ]
+        )
+        let entries = [
+            DockAXBadgeEntry(
+                title: "Messages",
+                path: "/System/Applications/Messages.app",
+                bundleIdentifier: "com.apple.MobileSMS",
+                badge: DockBadge(kind: .count(9), rawLabel: "9")
+            ),
+        ]
+        let merged = DockBadgeMerge.merging(launchServices: ls, accessibility: entries)
+        let slot = Slot(
+            id: "m",
+            label: "Messages",
+            target: "/System/Applications/Messages.app"
+        )
+        #expect(merged.badge(for: slot)?.count == 1)
+    }
+
+    @Test("Messages and WhatsApp are the AX-fill hole apps")
+    func holeApps() {
+        #expect(DockBadgeAXFill.isHoleApp(bundleIdentifier: "com.apple.MobileSMS"))
+        #expect(DockBadgeAXFill.isHoleApp(bundleIdentifier: nil, path: "/System/Applications/Messages.app"))
+        #expect(DockBadgeAXFill.isHoleApp(bundleIdentifier: "net.whatsapp.WhatsApp"))
+        #expect(!DockBadgeAXFill.isHoleApp(bundleIdentifier: "com.apple.mail"))
+        #expect(
+            !DockBadgeAXFill.isHoleApp(
+                bundleIdentifier: "com.apple.iCal",
+                path: "/System/Applications/Calendar.app"
+            )
+        )
+
+        let messages = AppIdentity(
+            bundleIdentifier: "com.apple.MobileSMS",
+            path: "/System/Applications/Messages.app"
+        )
+        #expect(
+            DockBadgeAXFill.shouldRequestAccessibility(
+                stripIdentities: [messages],
+                runningBundleIDs: []
+            )
+        )
+        #expect(
+            DockBadgeAXFill.shouldRequestAccessibility(
+                stripIdentities: [],
+                runningBundleIDs: ["net.whatsapp.WhatsApp"]
+            )
+        )
+        #expect(
+            !DockBadgeAXFill.shouldRequestAccessibility(
+                stripIdentities: [AppIdentity(bundleIdentifier: "com.apple.Safari")],
+                runningBundleIDs: ["com.apple.mail"]
+            )
+        )
+    }
+
     @Test("missing showNotificationBadges decodes on")
     func badgePrefDefault() throws {
         let decoded = try JSONDecoder().decode(DockPreferences.self, from: Data(#"{"edgeHover":true}"#.utf8))

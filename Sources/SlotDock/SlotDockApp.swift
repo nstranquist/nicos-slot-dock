@@ -534,7 +534,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func statusIcon(for slot: Slot) -> NSImage? {
         let token = dockController.badges.liveIconToken(for: slot)
-        if let image = SlotIconCache.image(for: slot, pointSize: 16, liveToken: token) {
+        if let image = SlotIconCache.image(
+            for: slot,
+            pointSize: 16,
+            liveToken: token,
+            calendarIconKey: dockController.badges.calendarIconKey
+        ) {
             return image
         }
         return nil

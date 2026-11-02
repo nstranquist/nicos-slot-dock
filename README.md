@@ -31,11 +31,13 @@ Launch at login is on in this capture. The product default is off.
 ## Highlights
 
 - Native AppKit and SwiftUI strip with no Dock icon during normal use
+- Live Calendar date on the Calendar tile (drawn locally; it does not use the
+  system Dock tile plugin)
 - **Merge** (default): custom slots first, then live system Dock applications
 - **Mirror**: system Dock applications only
 - **Off**: custom slots only
 - Drag an application, file, or URL onto the strip to add a custom slot
-- Right-click a tile for launch, reveal, remove, window, and process actions
+- Right-click a tile for launch, reveal, windows, Get Info, relaunch, and process actions
 - Optional running-application dots, notification badges, and transient tiles
 - Optional window safe-area inset so content clears the strip
 - Launch at login is off by default
@@ -105,8 +107,10 @@ app keeps a separate backup before it changes system Dock preferences.
 
 The basic launcher does not require Accessibility or Automation permission.
 
-- Accessibility is optional. It enables window safe-area adjustment. If macOS
-  grants access, it can also improve badge and window discovery.
+- Accessibility is optional. It enables window safe-area adjustment. Notification
+  badges for Messages and WhatsApp also use it, because those apps often omit
+  Launch Services badge labels. Keep Messages on the strip to show a badge
+  while the app is quit.
 - Automation is requested only for explicit settings actions that manage
   another application's login item or change system Dock compatibility.
 - System Dock preference actions are user-confirmed and keep a restorable

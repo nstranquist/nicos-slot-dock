@@ -42,6 +42,10 @@ final class SlotDockStore: ObservableObject {
     private let openHandler: (OpenPayload) -> Bool
     private let systemDockPlistURL: URL
     private var flashClearWork: DispatchWorkItem?
+    private var relaunchObserver: NSObjectProtocol?
+    private var relaunchTimeoutWork: DispatchWorkItem?
+    private var relaunchRemaining: Set<pid_t> = []
+    private var relaunchSlotID: String?
 
     var configurationReadOnly: Bool { core.isReadOnly }
 
@@ -501,9 +505,31 @@ final class SlotDockStore: ObservableObject {
             guard let slotID, let slot = slot(for: slotID) else { return false }
             copyToPasteboard(slot.label)
             return true
+        case .copyBundleIdentifier:
+            guard let slotID, let slot = slot(for: slotID) else { return false }
+            guard let id = AppIdentity.from(slot: slot).bundleIdentifier,
+                  SlotAppMenuPolicy.canCopyBundleIdentifier(id)
+            else { return false }
+            copyToPasteboard(id)
+            return true
+        case .getInfo:
+            guard let slotID else { return false }
+            return showGetInfo(slotID: slotID)
+        case .showAllWindows:
+            guard let slotID else { return false }
+            return showAllWindows(slotID: slotID)
         case .hideApplication:
             guard let slotID else { return false }
             return hideRunning(slotID: slotID)
+        case .unhideApplication:
+            guard let slotID else { return false }
+            return unhideRunning(slotID: slotID)
+        case .hideOthers:
+            guard let slotID else { return false }
+            return hideOthers(slotID: slotID)
+        case .relaunchApplication:
+            guard let slotID else { return false }
+            return relaunch(slotID: slotID)
         case .quitApplication:
             guard let slotID else { return false }
             return terminateRunning(slotID: slotID, force: false)
@@ -705,6 +731,173 @@ final class SlotDockStore: ObservableObject {
         guard !apps.isEmpty else { return false }
         for app in apps {
             app.hide()
+        }
+        return true
+    }
+
+    @discardableResult
+    func unhideRunning(slotID: String) -> Bool {
+        let apps = runningApplications(for: slotID)
+        guard !apps.isEmpty else { return false }
+        for app in apps {
+            app.unhide()
+            _ = app.activate(options: [.activateAllWindows])
+        }
+        return true
+    }
+
+    @discardableResult
+    func hideOthers(slotID: String) -> Bool {
+        let keep = Set(runningApplications(for: slotID).map(\.processIdentifier))
+        guard !keep.isEmpty else { return false }
+        let selfPID = ProcessInfo.processInfo.processIdentifier
+        for app in NSWorkspace.shared.runningApplications {
+            if app.processIdentifier == selfPID { continue }
+            if keep.contains(app.processIdentifier) { continue }
+            guard app.activationPolicy == .regular else { continue }
+            _ = app.hide()
+        }
+        return unhideRunning(slotID: slotID)
+    }
+
+    @discardableResult
+    func showAllWindows(slotID: String) -> Bool {
+        let apps = runningApplications(for: slotID)
+        guard !apps.isEmpty else { return false }
+        var activated = false
+        for app in apps {
+            app.unhide()
+            if app.activate(options: [.activateAllWindows]) {
+                activated = true
+            }
+            _ = DockAXWindowTitles.raiseAll(app: app)
+        }
+        // App Exposé uses the frontmost app. Do not fire it if activate failed.
+        if activated {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                _ = AppExpose.showFrontApplicationWindows()
+            }
+        }
+        return true
+    }
+
+    @discardableResult
+    func relaunch(slotID: String) -> Bool {
+        guard let slot = slot(for: slotID) else { return false }
+        let request = LaunchResolver.resolve(slot: slot)
+        let identity = AppIdentity.from(slot: slot)
+        guard SlotAppMenuPolicy.canRelaunch(
+            kind: request.kind,
+            isRunning: true,
+            isSelf: SlotAppMenuPolicy.isSelfApplication(bundleIdentifier: identity.bundleIdentifier)
+        ) else {
+            lastLaunchError = "Cannot relaunch this item."
+            return false
+        }
+        let apps = runningApplications(for: slotID)
+        guard !apps.isEmpty else { return launch(slotID: slotID) }
+
+        cancelRelaunchWait()
+        relaunchRemaining = Set(apps.map(\.processIdentifier))
+        relaunchSlotID = slotID
+        relaunchObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didTerminateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            let pid = app?.processIdentifier
+            Task { @MainActor in
+                guard let self, let pid else { return }
+                guard self.relaunchSlotID == slotID else { return }
+                self.relaunchRemaining.remove(pid)
+                if self.relaunchRemaining.isEmpty {
+                    self.finishRelaunch(slotID: slotID, timedOut: false)
+                }
+            }
+        }
+        for app in apps {
+            _ = app.terminate()
+        }
+        let work = DispatchWorkItem { [weak self] in
+            self?.finishRelaunch(slotID: slotID, timedOut: true)
+        }
+        relaunchTimeoutWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6, execute: work)
+        SlotDockTelemetry.launch.info("Relaunch requested \(slot.label, privacy: .private)")
+        return true
+    }
+
+    private func cancelRelaunchWait() {
+        if let relaunchObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(relaunchObserver)
+            self.relaunchObserver = nil
+        }
+        relaunchTimeoutWork?.cancel()
+        relaunchTimeoutWork = nil
+        relaunchRemaining = []
+        relaunchSlotID = nil
+    }
+
+    private func finishRelaunch(slotID: String, timedOut: Bool) {
+        cancelRelaunchWait()
+        let still = runningApplications(for: slotID)
+        if !still.isEmpty {
+            let name = slot(for: slotID)?.label ?? "app"
+            lastLaunchError = timedOut
+                ? "Relaunch timed out — \(name) is still running."
+                : "Relaunch cancelled — \(name) is still running."
+            SlotDockTelemetry.launch.warning(
+                "Relaunch incomplete \(name, privacy: .private) timeout=\(timedOut, privacy: .public)"
+            )
+            return
+        }
+        _ = launch(slotID: slotID)
+    }
+
+    func isSlotHidden(slotID: String) -> Bool {
+        let apps = runningApplications(for: slotID)
+        return !apps.isEmpty && apps.allSatisfy(\.isHidden)
+    }
+
+    @discardableResult
+    func showGetInfo(slotID: String) -> Bool {
+        guard let slot = slot(for: slotID) else { return false }
+        let request = LaunchResolver.resolve(slot: slot)
+        guard SlotAppMenuPolicy.canGetInfo(kind: request.kind) else {
+            lastLaunchError = "Get Info is not available for this item."
+            return false
+        }
+        let info = SlotInfoSnapshotBuilder.build(
+            label: slot.label,
+            kind: request.kind,
+            path: request.resolvedTarget
+        )
+        NSApp.activate()
+        let alert = NSAlert()
+        alert.messageText = info.label
+        alert.informativeText = SlotInfoFormatting.displayText(info)
+        alert.alertStyle = .informational
+        alert.window.level = .floating
+        if let icon = SlotIconCache.resolved(for: slot, pointSize: 64, liveToken: "")?.image {
+            alert.icon = icon
+        }
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Show in Finder")
+        let canCopy = SlotAppMenuPolicy.canCopyBundleIdentifier(info.bundleIdentifier)
+        if canCopy {
+            alert.addButton(withTitle: "Copy Bundle ID")
+        }
+        let response = alert.runModal()
+        switch response {
+        case .alertSecondButtonReturn:
+            revealInFinder(slotID: slotID)
+        case .alertThirdButtonReturn:
+            if let id = info.bundleIdentifier {
+                copyToPasteboard(id)
+            }
+        default:
+            break
         }
         return true
     }

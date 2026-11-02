@@ -36,12 +36,27 @@ enum SlotIconCache {
 
     private static let box = Box()
 
-    static func image(for slot: Slot, pointSize: CGFloat, liveToken: String = "") -> NSImage? {
-        resolved(for: slot, pointSize: pointSize, liveToken: liveToken)?.image
+    static func image(
+        for slot: Slot,
+        pointSize: CGFloat,
+        liveToken: String = "",
+        calendarIconKey: String = ""
+    ) -> NSImage? {
+        resolved(for: slot, pointSize: pointSize, liveToken: liveToken, calendarIconKey: calendarIconKey)?.image
     }
 
-    static func resolved(for slot: Slot, pointSize: CGFloat, liveToken: String = "") -> ResolvedSlotIcon? {
-        let key = cacheKey(slot: slot, pointSize: pointSize, liveToken: liveToken) as NSString
+    static func resolved(
+        for slot: Slot,
+        pointSize: CGFloat,
+        liveToken: String = "",
+        calendarIconKey: String = ""
+    ) -> ResolvedSlotIcon? {
+        let key = cacheKey(
+            slot: slot,
+            pointSize: pointSize,
+            liveToken: liveToken,
+            calendarIconKey: calendarIconKey
+        ) as NSString
         box.lock.lock()
         if let hit = box.cache.object(forKey: key) {
             box.lock.unlock()
@@ -54,7 +69,8 @@ enum SlotIconCache {
         box.lock.unlock()
 
         let resolved = SlotDockTelemetry.measure("icon.resolve", thresholdMS: 12) {
-            resolveUncached(slot: slot, liveToken: liveToken).map { hintSize($0, pointSize: pointSize) }
+            resolveUncached(slot: slot, liveToken: liveToken, pointSize: pointSize)
+                .map { hintSize($0, pointSize: pointSize) }
         }
         guard let resolved else {
             box.lock.lock()
@@ -79,9 +95,20 @@ enum SlotIconCache {
         SlotDockTelemetry.iconCache.info("icon cache invalidated")
     }
 
-    private static func cacheKey(slot: Slot, pointSize: CGFloat, liveToken: String) -> String {
+    private static func cacheKey(
+        slot: Slot,
+        pointSize: CGFloat,
+        liveToken: String,
+        calendarIconKey: String
+    ) -> String {
         let icon = slot.iconPath ?? ""
-        return "\(slot.id)|\(slot.target)|\(icon)|\(liveToken)|\(fileSignature(for: icon))|\(fileSignature(for: slot.target))|\(Int(pointSize * 2))"
+        let calendarKey: String
+        if CalendarDockIcon.matches(slot: slot) {
+            calendarKey = calendarIconKey.isEmpty ? CalendarDockIcon.iconCacheKey() : calendarIconKey
+        } else {
+            calendarKey = ""
+        }
+        return "\(slot.id)|\(slot.target)|\(icon)|\(liveToken)|\(calendarKey)|\(fileSignature(for: icon))|\(fileSignature(for: slot.target))|\(Int(pointSize * 2))"
     }
 
     /// Include enough file identity to invalidate an icon when an app or
@@ -98,7 +125,11 @@ enum SlotIconCache {
         return "\(inode?.int64Value ?? -1):\(size?.int64Value ?? -1):\(modified?.timeIntervalSince1970 ?? -1)"
     }
 
-    private static func resolveUncached(slot: Slot, liveToken: String) -> ResolvedSlotIcon? {
+    private static func resolveUncached(
+        slot: Slot,
+        liveToken: String,
+        pointSize: CGFloat
+    ) -> ResolvedSlotIcon? {
         if let custom = slot.iconPath, !custom.isEmpty {
             let path = (custom as NSString).expandingTildeInPath
             if let img = NSImage(contentsOfFile: path) {
@@ -106,6 +137,13 @@ enum SlotIconCache {
                 let isComposed = ext == "icns" || Self.hasTransparentCorners(img)
                 return ResolvedSlotIcon(image: img, appliesMask: !isComposed)
             }
+        }
+        if CalendarDockIcon.matches(slot: slot) {
+            let caption = CalendarDockIcon.caption()
+            return ResolvedSlotIcon(
+                image: CalendarDockIconRenderer.image(caption: caption, pointSize: max(pointSize, 16)),
+                appliesMask: false
+            )
         }
         let request = LaunchResolver.resolve(slot: slot)
         if request.kind == .application, !request.resolvedTarget.isEmpty {

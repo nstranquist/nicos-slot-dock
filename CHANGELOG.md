@@ -4,6 +4,19 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+- Draw today's month and day on the Calendar tile. Refresh at midnight,
+  clock change, and locale change. Icon Services still returns a static
+  marketing date; the system Dock tile plugin is not used.
+- Match Messages and WhatsApp badges by Dock `AXURL` path and bundle, not
+  only by title. Ask for Accessibility once when notification badges are on.
+- Keep Messages on the strip to show a badge while the app is quit.
+- Add Show All Windows, Show, Hide Others, Relaunch, Get Info, and Copy
+  Bundle ID to application tile context menus.
+- Keep Relaunch off for Nicos Slot Dock itself. Get Info is local and does
+  not require Finder Automation.
+- Fire App Exposé only after the target app activates. Validate tile menus
+  in headless smoke.
+
 ## 0.3.6 - 2026-08-17
 
 - Skip launch-at-login sync for multi-instance and `SLOT_DOCK_CONFIG` overrides.

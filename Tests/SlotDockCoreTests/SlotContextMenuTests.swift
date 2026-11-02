@@ -30,6 +30,12 @@ struct SlotContextMenuTests {
         #expect(actions.contains(.quitApplication))
         #expect(actions.contains(.forceQuitApplication))
         #expect(actions.contains(.hideApplication))
+        #expect(actions.contains(.showAllWindows))
+        #expect(actions.contains(.hideOthers))
+        #expect(actions.contains(.relaunchApplication))
+        #expect(actions.contains(.getInfo))
+        #expect(!actions.contains(.copyBundleIdentifier))
+        #expect(!actions.contains(.unhideApplication))
 
         let moveLeft = model.actionableItems.first { $0.action == .moveLeft }
         let moveRight = model.actionableItems.first { $0.action == .moveRight }
@@ -217,5 +223,164 @@ struct SlotContextMenuTests {
         let actions = Set(model.actionableItems.compactMap(\.action))
         #expect(!actions.contains(.enableOpenAtLogin))
         #expect(!actions.contains(.disableOpenAtLogin))
+        #expect(actions.contains(.getInfo))
+        #expect(!actions.contains(.showAllWindows))
+        #expect(!actions.contains(.relaunchApplication))
+        #expect(!actions.contains(.hideOthers))
+    }
+
+    @Test("hidden running app offers Show instead of Hide")
+    func hiddenShowsUnhide() {
+        let model = SlotContextMenuBuilder.buildSlotMenu(
+            input: SlotContextMenuInput(
+                label: "Notes",
+                origin: .custom,
+                kind: .application,
+                isRunning: true,
+                canOpenNewInstance: true,
+                canImportAsCustom: false,
+                customIndex: 0,
+                customCount: 1,
+                isHidden: true
+            )
+        )
+        let actions = Set(model.actionableItems.compactMap(\.action))
+        #expect(actions.contains(.unhideApplication))
+        #expect(!actions.contains(.hideApplication))
+        #expect(actions.contains(.showAllWindows))
+    }
+
+    @Test("copy bundle id only when identifier is present")
+    func copyBundleWhenKnown() {
+        let withID = SlotContextMenuBuilder.buildSlotMenu(
+            input: SlotContextMenuInput(
+                label: "Safari",
+                origin: .systemDock,
+                kind: .application,
+                isRunning: false,
+                canOpenNewInstance: true,
+                canImportAsCustom: true,
+                customIndex: nil,
+                customCount: 0,
+                bundleIdentifier: "com.apple.Safari"
+            )
+        )
+        #expect(withID.actionableItems.contains { $0.action == .copyBundleIdentifier })
+
+        let withoutID = SlotContextMenuBuilder.buildSlotMenu(
+            input: SlotContextMenuInput(
+                label: "Safari",
+                origin: .systemDock,
+                kind: .application,
+                isRunning: false,
+                canOpenNewInstance: true,
+                canImportAsCustom: true,
+                customIndex: nil,
+                customCount: 0,
+                bundleIdentifier: "  "
+            )
+        )
+        #expect(!withoutID.actionableItems.contains { $0.action == .copyBundleIdentifier })
+    }
+
+    @Test("self application omits relaunch")
+    func selfOmitsRelaunch() {
+        let model = SlotContextMenuBuilder.buildSlotMenu(
+            input: SlotContextMenuInput(
+                label: "Nicos Slot Dock",
+                origin: .custom,
+                kind: .application,
+                isRunning: true,
+                canOpenNewInstance: true,
+                canImportAsCustom: false,
+                customIndex: 0,
+                customCount: 1,
+                isSelfApplication: true
+            )
+        )
+        let actions = Set(model.actionableItems.compactMap(\.action))
+        #expect(!actions.contains(.relaunchApplication))
+        #expect(actions.contains(.quitApplication))
+        #expect(actions.contains(.showAllWindows))
+    }
+
+    @Test("url slot has no get info")
+    func urlHasNoGetInfo() {
+        let model = SlotContextMenuBuilder.buildSlotMenu(
+            input: SlotContextMenuInput(
+                label: "Docs",
+                origin: .custom,
+                kind: .url,
+                isRunning: false,
+                canOpenNewInstance: false,
+                canImportAsCustom: false,
+                customIndex: 0,
+                customCount: 1
+            )
+        )
+        let actions = Set(model.actionableItems.compactMap(\.action))
+        #expect(!actions.contains(.getInfo))
+        #expect(!actions.contains(.showAllWindows))
+        let finder = model.actionableItems.first { $0.action == .showInFinder }
+        #expect(finder?.enabled == false)
+    }
+
+    @Test("running custom app menu has a stable outline")
+    func runningCustomOutline() {
+        let model = SlotContextMenuBuilder.buildSlotMenu(
+            input: SlotContextMenuInput(
+                label: "Notes",
+                origin: .custom,
+                kind: .application,
+                isRunning: true,
+                canOpenNewInstance: true,
+                canImportAsCustom: false,
+                customIndex: 1,
+                customCount: 3,
+                bundleIdentifier: "com.apple.Notes"
+            )
+        )
+        #expect(model.titleOutline == [
+            "Open",
+            "Open New Instance",
+            "---",
+            "Show in Finder",
+            "Get Info",
+            "Copy Path",
+            "Copy Name",
+            "Copy Bundle ID",
+            "---",
+            "Options/",
+            "  Remove from Nicos Slot Dock",
+            "  Edit Slot…",
+            "  Move Left",
+            "  Move Right",
+            "---",
+            "Show All Windows",
+            "Hide",
+            "Hide Others",
+            "---",
+            "Relaunch",
+            "Quit",
+            "Force Quit",
+            "---",
+            "Edit Slots…",
+        ])
+    }
+
+    @Test("app menu policy gates")
+    func appMenuPolicy() {
+        #expect(SlotAppMenuPolicy.canGetInfo(kind: .application))
+        #expect(SlotAppMenuPolicy.canGetInfo(kind: .file))
+        #expect(!SlotAppMenuPolicy.canGetInfo(kind: .url))
+        #expect(SlotAppMenuPolicy.canShowAllWindows(kind: .application, isRunning: true))
+        #expect(!SlotAppMenuPolicy.canShowAllWindows(kind: .application, isRunning: false))
+        #expect(!SlotAppMenuPolicy.canRelaunch(kind: .application, isRunning: true, isSelf: true))
+        #expect(SlotAppMenuPolicy.canRelaunch(kind: .application, isRunning: true, isSelf: false))
+        #expect(SlotAppMenuPolicy.isSelfApplication(bundleIdentifier: "com.nstranquist.nicos-slot-dock"))
+        #expect(!SlotAppMenuPolicy.isSelfApplication(bundleIdentifier: "com.apple.Safari"))
+        #expect(!SlotAppMenuPolicy.canCopyBundleIdentifier(nil))
+        #expect(!SlotAppMenuPolicy.canCopyBundleIdentifier(" "))
+        #expect(SlotAppMenuPolicy.canCopyBundleIdentifier("com.apple.Safari"))
     }
 }
