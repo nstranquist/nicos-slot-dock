@@ -2,7 +2,7 @@
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.3.7 - 2026-11-02
 
 - Show Finder Trash on the right of the strip. The tile uses the empty and
   full system icons, opens Trash in Finder, accepts dropped files, and
